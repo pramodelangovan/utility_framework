@@ -1,148 +1,177 @@
 .ssh {
     display: flex;
     flex-direction: column;
-    height: 100%;
-    width: 100%;
+    inline-size: 100%;
+    block-size: 100%;
+    min-inline-size: 0;
+    min-block-size: 0;
 }
 
-/* Session tabs: paper strips along the top of the content area */
 .session-bar {
     display: flex;
-    align-items: flex-end;
-    gap: 8px;
-    padding: 12px 14px 0;
-    background: var(--dp-color-emphasis);
-    border-bottom: var(--dp-border-panel) solid var(--line);
+    align-items: center;
+    gap: 6px;
+    min-block-size: 48px;
+    padding: 6px var(--spacing-page);
+    border-block-end: 1px solid var(--border-line);
+    background: var(--bg-card);
     overflow-x: auto;
+    overscroll-behavior-inline: contain;
+}
+
+.session-tab-group {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: stretch;
 }
 
 .session-tab,
-.session-add {
+.session-add,
+.session-close {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 8px;
-    padding: 8px 14px;
-    border: var(--dp-border-divider) solid var(--dp-color-ink);
-    border-bottom: none;
-    border-radius: var(--dp-radius-control);
-    background: var(--dp-color-contrast);
-    color: var(--dp-color-ink);
-    font-size: var(--dp-typography-small);
-    font-weight: var(--dp-typography-emphasis-weight);
+    min-block-size: 34px;
+    padding: 6px 10px;
+    border: 1px solid var(--border-line);
+    background: transparent;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 700;
     cursor: pointer;
     white-space: nowrap;
 }
 
+.session-tab {
+    max-inline-size: min(280px, 60vw);
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .session-tab:hover,
-.session-add:hover {
-    background: var(--dp-color-field);
+.session-add:hover,
+.session-close:hover {
+    border-color: var(--primary);
+    color: var(--primary);
 }
 
 .session-tab.active,
 .session-add.active {
-    background: var(--dp-color-signal);
-    padding-bottom: 11px;
-    margin-bottom: -4px;
+    border-color: rgb(0 212 255 / 55%);
+    background: rgb(0 212 255 / 9%);
+    color: var(--primary);
+    box-shadow: inset 0 2px var(--primary);
 }
 
-.session-tab button {
-    display: grid;
-    place-items: center;
-    width: 20px;
-    height: 20px;
-    padding: 0;
-    border: var(--dp-border-annotation) solid var(--dp-color-ink);
-    background: var(--dp-color-contrast);
-    color: var(--dp-color-ink);
-    font-size: 14px;
-    line-height: 1;
-    cursor: pointer;
+.session-close {
+    min-inline-size: 34px;
+    padding-inline: 8px;
+    border-inline-start: 0;
+    font-size: 16px;
 }
 
-.session-tab button:hover {
-    background: var(--dp-color-emphasis);
+.session-add {
+    min-inline-size: 36px;
+    font-size: 16px;
 }
 
 .ssh-body {
-    flex: 1;
-    min-height: 0;
     position: relative;
-    background: var(--bg);
-    overflow-y: auto;
+    flex: 1;
+    min-block-size: 0;
+    background: transparent;
+    overflow: auto;
+    overscroll-behavior: contain;
 }
 
 .terminal-pane {
     position: absolute;
     inset: 0;
     padding: 10px;
-    background: #0b0d12;
-    border-top: var(--dp-border-divider) solid var(--line);
+    border: 1px solid var(--border-line);
+    background: #07090e;
 }
 
 .terminal-host {
-    width: 100%;
-    height: 100%;
+    inline-size: 100%;
+    block-size: 100%;
 }
 
-/* Shared control look */
 .primary,
 .secondary {
-    padding: 10px 18px;
-    border: var(--dp-border-divider) solid var(--dp-color-ink);
-    border-radius: var(--dp-radius-control);
-    color: var(--dp-color-ink);
-    box-shadow: 4px 4px 0 var(--dp-color-ink);
-    font-size: var(--dp-typography-small);
-    font-weight: var(--dp-typography-emphasis-weight);
+    min-block-size: 38px;
+    padding: 8px 14px;
+    border: 1px solid var(--border-line);
+    color: var(--text-active);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
     cursor: pointer;
+    transition: border-color 120ms ease, color 120ms ease, background-color 120ms ease;
 }
 
 .primary {
-    background: var(--dp-color-emphasis);
+    border-color: var(--primary-dim);
+    background: rgb(0 212 255 / 12%);
+    color: var(--primary);
 }
 
 .secondary {
-    background: var(--dp-color-contrast);
+    background: var(--bg-raised);
+    color: var(--text-muted);
 }
 
 .primary:hover,
 .secondary:hover {
-    transform: translate(-2px, -2px);
-    box-shadow: 6px 6px 0 var(--dp-color-ink);
-}
-
-.primary:active,
-.secondary:active {
-    transform: translate(3px, 3px);
-    box-shadow: 1px 1px 0 var(--dp-color-ink);
+    border-color: var(--primary);
+    color: var(--primary);
 }
 
 .new-conn {
-    padding: var(--dp-spacing-gap);
     display: flex;
     flex-direction: column;
-    gap: var(--dp-spacing-gap);
+    gap: clamp(16px, 2vw, 26px);
+    min-inline-size: 0;
+    padding: var(--spacing-page);
+    container: new-connection / inline-size;
 }
 
 .quick {
+    position: relative;
     display: flex;
-    gap: 12px;
-    padding: var(--dp-spacing-gap-compact);
-    background: var(--dp-color-field);
-    border: var(--dp-border-panel) solid var(--line);
-    box-shadow: 6px 6px 0 var(--shadow);
+    gap: 10px;
+    padding: 16px;
+    border: 1px solid var(--border-line);
+    background: var(--bg-card);
+}
+
+.quick::before,
+.ssh-form::before {
+    position: absolute;
+    inset-block-start: -1px;
+    inset-inline-start: -1px;
+    inline-size: 8px;
+    block-size: 8px;
+    border-block-start: 2px solid var(--primary);
+    border-inline-start: 2px solid var(--primary);
+    content: '';
 }
 
 .quick input,
 .ssh-form input:not([type='checkbox']) {
-    min-width: 0;
-    padding: 10px 12px;
-    border: var(--dp-border-divider) solid var(--dp-color-ink);
-    border-radius: var(--dp-radius-control);
-    background: var(--dp-color-contrast);
-    color: var(--dp-color-ink);
-    font-size: var(--dp-typography-reading);
+    min-inline-size: 0;
+    min-block-size: 44px;
+    padding: 9px 11px;
+    border: 1px solid var(--border-line);
+    border-radius: 0;
+    background: var(--bg-dark);
+    color: var(--text-active);
+    font-family: var(--font-mono);
+    font-size: 12px;
     user-select: text;
 }
 
@@ -150,132 +179,158 @@
     flex: 1;
 }
 
+.quick input::placeholder,
+.ssh-form input::placeholder {
+    color: var(--text-muted);
+    opacity: 0.82;
+}
+
 .quick input:focus,
 .ssh-form input:focus {
-    background: var(--dp-color-emphasis);
+    border-color: var(--primary);
+    background: var(--bg-raised);
 }
 
 .new-conn-cols {
     display: flex;
-    gap: var(--dp-spacing-gap);
     align-items: flex-start;
+    gap: clamp(16px, 2vw, 26px);
+    min-inline-size: 0;
     flex-wrap: wrap;
 }
 
 .saved {
-    flex: 1;
-    min-width: 280px;
     display: flex;
+    flex: 1 1 280px;
     flex-direction: column;
-    gap: 12px;
+    gap: 8px;
+    min-inline-size: 0;
 }
 
 .saved-head {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    padding: 6px 12px;
-    background: var(--dp-color-ink);
-    color: var(--dp-color-emphasis);
-    border: var(--dp-border-panel) solid var(--line);
+    justify-content: space-between;
+    gap: 12px;
+    min-block-size: 48px;
+    padding: 6px 10px;
+    border-block-end: 1px solid var(--border-line);
 }
 
-.saved-head h3 {
+.saved-head h2 {
     margin: 0;
-    font-size: 22px;
-    font-weight: var(--dp-typography-display-weight);
-    letter-spacing: var(--dp-typography-display-tracking);
+    color: var(--text-active);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
     text-transform: uppercase;
+    text-wrap: balance;
 }
 
 .muted {
-    color: var(--text);
-    font-size: var(--dp-typography-small);
+    color: var(--text-muted);
+    font-size: 13px;
+    text-wrap: pretty;
 }
 
 .saved-item {
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 8px 10px;
-    border: var(--dp-border-divider) solid var(--dp-color-ink);
-    background: var(--dp-color-contrast);
-    color: var(--dp-color-ink);
-    box-shadow: 4px 4px 0 var(--shadow);
+    min-inline-size: 0;
+    padding: 7px 8px;
+    border: 1px solid var(--border-line);
+    background: var(--bg-card);
+    color: var(--text-active);
 }
 
 .saved-item:hover {
-    background: var(--dp-color-emphasis);
+    border-color: rgb(0 212 255 / 50%);
+    background: rgb(0 212 255 / 5%);
 }
 
 .saved-info {
-    flex: 1;
-    min-width: 0;
     display: flex;
+    flex: 1;
     flex-direction: column;
-    gap: 2px;
+    gap: 4px;
+    min-inline-size: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: start;
     cursor: pointer;
 }
 
 .saved-info strong {
-    font-weight: var(--dp-typography-emphasis-weight);
-    font-size: var(--dp-typography-body);
+    color: var(--text-active);
+    font-size: 13px;
+    font-weight: 700;
 }
 
 .saved-info span {
-    font-size: var(--dp-typography-metadata);
     overflow: hidden;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 10px;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
 .saved-item button {
-    width: 32px;
-    height: 32px;
-    border: var(--dp-border-annotation) solid var(--dp-color-ink);
-    background: var(--dp-color-field);
-    color: var(--dp-color-ink);
+    min-inline-size: 34px;
+    min-block-size: 34px;
+    padding: 4px 8px;
+    border: 1px solid var(--border-line);
+    background: transparent;
+    color: var(--text-muted);
     cursor: pointer;
 }
 
 .saved-item button:hover {
-    background: var(--dp-color-signal);
+    border-color: var(--primary);
+    color: var(--primary);
 }
 
-/* Form panel */
 .ssh-form {
+    position: relative;
     display: flex;
+    flex: 0 1 420px;
     flex-direction: column;
     gap: 14px;
-    width: 400px;
-    max-width: 100%;
-    flex-shrink: 0;
-    padding: var(--dp-spacing-gap);
-    background: var(--dp-color-contrast);
-    color: var(--dp-color-ink);
-    border: var(--dp-border-panel) solid var(--dp-color-ink);
-    box-shadow: 8px 8px 0 var(--shadow);
-    align-self: flex-start;
+    inline-size: min(420px, 100%);
+    min-inline-size: 0;
+    padding: clamp(16px, 2vw, 24px);
+    border: 1px solid var(--border-line);
+    background: var(--bg-card);
+    color: var(--text-active);
 }
 
 .ssh-form h2 {
     margin: 0 0 4px;
-    padding: 4px 10px;
-    align-self: flex-start;
-    background: var(--dp-color-signal);
-    border: var(--dp-border-divider) solid var(--dp-color-ink);
-    font-size: 22px;
-    font-weight: var(--dp-typography-display-weight);
-    letter-spacing: var(--dp-typography-display-tracking);
+    padding-block-end: 10px;
+    border-block-end: 1px solid var(--border-line);
+    color: var(--primary);
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
     text-transform: uppercase;
+    text-wrap: balance;
 }
 
 .ssh-form label {
     display: flex;
     flex-direction: column;
     gap: 6px;
-    font-size: var(--dp-typography-label);
-    font-weight: var(--dp-typography-emphasis-weight);
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
 }
 
@@ -286,39 +341,41 @@
 
 .ssh-form .grow {
     flex: 1;
-    min-width: 0;
+    min-inline-size: 0;
 }
 
 .ssh-form .port {
-    width: 90px;
+    flex: 0 0 88px;
 }
 
 .segmented {
     display: flex;
-    border: var(--dp-border-divider) solid var(--dp-color-ink);
+    border: 1px solid var(--border-line);
 }
 
 .segmented button {
     flex: 1;
+    min-block-size: 40px;
     padding: 8px;
-    border: none;
-    background: var(--dp-color-contrast);
-    color: var(--dp-color-ink);
-    font-size: var(--dp-typography-small);
-    font-weight: var(--dp-typography-emphasis-weight);
+    border: 0;
+    background: transparent;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
     cursor: pointer;
 }
 
 .segmented button + button {
-    border-left: var(--dp-border-divider) solid var(--dp-color-ink);
+    border-inline-start: 1px solid var(--border-line);
 }
 
-.segmented button:hover {
-    background: var(--dp-color-field);
-}
-
+.segmented button:hover,
 .segmented button.on {
-    background: var(--dp-color-emphasis);
+    background: rgb(0 212 255 / 8%);
+    color: var(--primary);
 }
 
 .segmented button.on::before {
@@ -329,53 +386,89 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
-    padding-top: 14px;
-    border-top: var(--dp-border-divider) solid var(--dp-color-ink);
+    padding-block-start: 14px;
+    border-block-start: 1px solid var(--border-line);
 }
 
 .ssh-form label.check {
     flex-direction: row;
     align-items: center;
-    gap: 8px;
+    gap: 9px;
+    min-block-size: 44px;
+    color: var(--text-muted);
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 400;
+    letter-spacing: normal;
     text-transform: none;
-    font-size: var(--dp-typography-metadata);
 }
 
 .ssh-form label.check input {
-    width: 20px;
-    height: 20px;
-    accent-color: var(--dp-color-signal);
+    flex: 0 0 18px;
+    inline-size: 18px;
+    block-size: 18px;
+    accent-color: var(--primary);
 }
 
 .ssh-error {
-    margin: var(--dp-spacing-gap) var(--dp-spacing-gap) 0;
-    padding: 10px 14px;
-    background: var(--dp-color-signal);
-    color: var(--dp-color-ink);
-    border: var(--dp-border-divider) solid var(--dp-color-ink);
-    box-shadow: 4px 4px 0 var(--shadow);
-    font-size: var(--dp-typography-small);
-    font-weight: var(--dp-typography-emphasis-weight);
+    display: block;
+    inline-size: calc(100% - 2 * var(--spacing-page));
+    margin: var(--spacing-page) var(--spacing-page) 0;
+    padding: 10px 12px;
+    border: 1px solid var(--danger);
+    background: rgb(255 46 99 / 10%);
+    color: var(--danger);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 700;
+    text-align: start;
+    overflow-wrap: anywhere;
     cursor: pointer;
 }
 
-@media (max-width: 720px) {
-    .new-conn {
-        padding: var(--dp-spacing-gap-compact);
+@container new-connection (max-width: 760px) {
+    .new-conn-cols {
+        flex-direction: column;
+    }
+
+    .saved,
+    .ssh-form {
+        flex: 1 1 auto;
+        inline-size: 100%;
+    }
+}
+
+@media (max-width: 520px) {
+    .session-bar {
+        padding-inline: 12px;
     }
 
     .quick {
         flex-direction: column;
-        box-shadow: 4px 4px 0 var(--shadow);
+        padding: 12px;
     }
 
-    .ssh-form {
-        width: 100%;
-        box-shadow: 5px 5px 0 var(--shadow);
+    .ssh-form .row {
+        flex-wrap: wrap;
     }
+}
 
+@media (pointer: coarse) {
+    .session-tab,
+    .session-add,
+    .session-close,
     .primary,
-    .secondary {
-        box-shadow: 3px 3px 0 var(--dp-color-ink);
+    .secondary,
+    .saved-item button {
+        min-block-size: 44px;
+    }
+
+    .session-close,
+    .saved-item button {
+        min-inline-size: 44px;
+    }
+
+    .segmented button {
+        min-block-size: 44px;
     }
 }

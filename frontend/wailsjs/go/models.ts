@@ -95,3 +95,40 @@ export namespace ssh {
 
 }
 
+export namespace vnc {
+	
+	export class Crop {
+	    x: number;
+	    y: number;
+	    width: number;
+	    height: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Crop(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.x = source["x"];
+	        this.y = source["y"];
+	        this.width = source["width"];
+	        this.height = source["height"];
+	    }
+	}
+	export class Tunnel {
+	    id: string;
+	    url: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Tunnel(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.url = source["url"];
+	    }
+	}
+
+}
+

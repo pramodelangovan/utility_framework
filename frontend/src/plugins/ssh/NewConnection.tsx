@@ -54,27 +54,32 @@ export default function NewConnection({logins, onConnect, onSave, onDelete}: Pro
                 <input
                     value={quick}
                     placeholder="Quick connect:  user@host[:port] [command]   or   ssh -p 22 -i key user@host"
+                    aria-label="Quick connect command"
                     onChange={e => setQuick(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && runQuick()}
                 />
-                <button className="primary" onClick={runQuick}>Go</button>
+                <button type="button" className="primary" onClick={runQuick}>Go</button>
             </div>
 
             <div className="new-conn-cols">
                 <section className="saved">
                     <div className="saved-head">
-                        <h3>Saved logins</h3>
-                        <button className="secondary" onClick={() => openForm()}>+ New</button>
+                        <h2>Saved logins</h2>
+                        <button type="button" className="secondary" onClick={() => openForm()}>+ New</button>
                     </div>
                     {logins.length === 0 && <p className="muted">No saved logins yet.</p>}
                     {logins.map(l => (
-                        <div key={l.id} className="saved-item" onDoubleClick={() => onConnect(toDetails(l))}>
-                            <div className="saved-info" onClick={() => onConnect(toDetails(l))}>
+                        <div key={l.id} className="saved-item">
+                            <button type="button" className="saved-info"
+                                    aria-label={`Connect to ${l.name}`}
+                                    onClick={() => onConnect(toDetails(l))}>
                                 <strong>{l.name}</strong>
                                 <span>{l.username}@{l.host}:{l.port}{l.startupCommand ? ` · ${l.startupCommand}` : ''}</span>
-                            </div>
-                            <button title="Edit" onClick={() => openForm({...toDetails(l), name: l.name, hasSecret: l.hasSecret})}>✎</button>
-                            <button title="Delete" onClick={() => onDelete(l.id)}>🗑</button>
+                            </button>
+                            <button type="button" title="Edit" aria-label={`Edit ${l.name}`}
+                                    onClick={() => openForm({...toDetails(l), name: l.name, hasSecret: l.hasSecret})}>✎</button>
+                            <button type="button" title="Delete" aria-label={`Delete ${l.name}`}
+                                    onClick={() => onDelete(l.id)}>🗑</button>
                         </div>
                     ))}
                 </section>

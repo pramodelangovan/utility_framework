@@ -28,7 +28,7 @@ export default function TerminalView({id, details, active}: Props) {
             cursorBlink: true,
             fontFamily: 'Cascadia Mono, Consolas, monospace',
             fontSize: 14,
-            theme: {background: '#0b0d12', foreground: '#e6e8ef', cursor: '#ffed00'},
+            theme: {background: '#07090e', foreground: '#f3fbff', cursor: '#00d4ff'},
         })
         const fit = new FitAddon()
         term.loadAddon(fit)

@@ -69,17 +69,19 @@ export default function SSHPlugin() {
         <div className="ssh">
             <div className="session-bar">
                 {sessions.map(s => (
-                    <div key={s.id} className={`session-tab ${activeKey === s.id ? 'active' : ''}`}
-                         onClick={() => setActiveKey(s.id)}>
-                        <span>{s.title}</span>
-                        <button title="Close session" onClick={e => {
-                            e.stopPropagation()
-                            close(s.id)
-                        }}>×
+                    <div key={s.id} className="session-tab-group">
+                        <button type="button" className={`session-tab ${activeKey === s.id ? 'active' : ''}`}
+                                title={s.title} onClick={() => setActiveKey(s.id)}>
+                            {s.title}
                         </button>
+                        <button type="button" className="session-close" title="Close session"
+                                aria-label={`Close ${s.title} session`} onClick={() => {
+                            close(s.id)
+                        }}>×</button>
                     </div>
                 ))}
-                <button className={`session-add ${activeKey === NEW ? 'active' : ''}`} title="New connection"
+                <button type="button" className={`session-add ${activeKey === NEW ? 'active' : ''}`} title="New connection"
+                        aria-label="New connection"
                         onClick={() => setActiveKey(NEW)}>+
                 </button>
             </div>
@@ -87,7 +89,11 @@ export default function SSHPlugin() {
             <div className="ssh-body">
                 {activeKey === NEW && (
                     <>
-                        {error && <div className="ssh-error" onClick={() => setError('')}>{error}</div>}
+                        {error && (
+                            <button type="button" className="ssh-error" onClick={() => setError('')}>
+                                {error}
+                            </button>
+                        )}
                         <NewConnection logins={logins} onConnect={open} onSave={save} onDelete={remove}/>
                     </>
                 )}
