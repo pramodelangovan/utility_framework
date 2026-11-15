@@ -3,6 +3,7 @@ import RFB from '@novnc/novnc'
 import {Start, Stop} from '../../../wailsjs/go/vnc/Service'
 import {WindowFullscreen, WindowIsFullscreen, WindowUnfullscreen} from '../../../wailsjs/runtime/runtime'
 import ScreenshotEditor from './ScreenshotEditor'
+import VNCConnections from './VNCConnections'
 import type {Snapshot} from './ScreenshotEditor'
 import './vnc.css'
 
@@ -13,12 +14,20 @@ interface Session {
     password: string
 }
 
-function Desktop({session, active}: {session: Session; active: boolean}) {
+function Desktop({session, active, onAuthLimit}: {session: Session; active: boolean; onAuthLimit: () => void}) {
     const desktop = useRef<HTMLDivElement>(null)
     const screen = useRef<HTMLDivElement>(null)
     const fullscreenButton = useRef<HTMLButtonElement>(null)
     const client = useRef<RFB | null>(null)
     const [status, setStatus] = useState('Connecting...')
+    const [retryable, setRetryable] = useState(false)
+    const [passwordPrompt, setPasswordPrompt] = useState(false)
+    const [passwordInput, setPasswordInput] = useState('')
+    const [attempt, setAttempt] = useState(0)
+    const failures = useRef(0)
+    const lastPassword = useRef(session.password)
+    const awaitingPassword = useRef(false)
+    const passwordSent = useRef(false)
     const [fullscreen, setFullscreen] = useState(false)
     const [fullscreenError, setFullscreenError] = useState('')
     const [fullscreenPending, setFullscreenPending] = useState(false)
@@ -102,55 +111,96 @@ function Desktop({session, active}: {session: Session; active: boolean}) {
         let disposed = false
         let tunnelId = ''
         let rfb: RFB | null = null
-        let failure = ''
+        let failureHandled = false
+        let disconnected = false
 
+        setStatus('Connecting...')
+        setRetryable(false)
+        setPasswordPrompt(false)
+        awaitingPassword.current = false
+        passwordSent.current = false
         Start(session.host, session.port).then(tunnel => {
             tunnelId = tunnel.id
             if (disposed || !screen.current) {
                 void Stop(tunnelId).catch(console.error)
                 return
             }
-            rfb = new RFB(screen.current, tunnel.url, {
-                credentials: session.password ? {password: session.password} : {},
-            })
+            rfb = new RFB(screen.current, tunnel.url, {credentials: {}})
             client.current = rfb
             rfb.scaleViewport = true
-            rfb.addEventListener('connect', () => setStatus('Connected'))
+            rfb.addEventListener('connect', () => {
+                if (disposed) return
+                failures.current = 0
+                setStatus('Connected')
+                setPasswordPrompt(false)
+            })
             rfb.addEventListener('credentialsrequired', event => {
-                failure = event.detail.types.some(type => type !== 'password')
-                    ? 'This server requires credentials other than a VNC password, which are not supported.'
-                    : 'The server requires a VNC password. Close this session and reconnect with a password.'
-                setStatus(failure)
-                rfb?.disconnect()
+                if (disposed) return
+                if (event.detail.types.some(type => type !== 'password')) {
+                    failureHandled = true
+                    setStatus('This server requires credentials other than a VNC password, which are not supported.')
+                    setRetryable(true)
+                    rfb?.disconnect()
+                } else if (lastPassword.current) {
+                    passwordSent.current = true
+                    rfb?.sendCredentials({password: lastPassword.current})
+                } else {
+                    awaitingPassword.current = true
+                    setStatus('Enter the VNC password.')
+                    setPasswordPrompt(true)
+                }
             })
             rfb.addEventListener('serververification', () => {
-                failure = 'This server requires identity verification, which is not supported.'
-                setStatus(failure)
+                if (disposed) return
+                failureHandled = true
+                setStatus('This server requires identity verification, which is not supported.')
+                setRetryable(true)
                 rfb?.disconnect()
             })
             rfb.addEventListener('securityfailure', (event) => {
-                failure = `Authentication failed${event.detail.reason ? `: ${event.detail.reason}` : '.'}`
-                setStatus(failure)
+                if (disposed) return
+                failureHandled = true
+                awaitingPassword.current = false
+                if (passwordSent.current) {
+                    failures.current += 1
+                    lastPassword.current = ''
+                    if (failures.current >= 3) {
+                        onAuthLimit()
+                        return
+                    }
+                    setStatus(`Incorrect password. ${3 - failures.current} attempt(s) remaining.`)
+                    setPasswordPrompt(true)
+                } else {
+                    setStatus(`Authentication failed${event.detail.reason ? `: ${event.detail.reason}` : '.'}`)
+                    setRetryable(true)
+                }
             })
             rfb.addEventListener('disconnect', (event) => {
-                if (!disposed) {
-                    setStatus(failure || (event.detail.clean
+                disconnected = true
+                if (!disposed && !failureHandled) {
+                    awaitingPassword.current = false
+                    setPasswordPrompt(false)
+                    setRetryable(true)
+                    setStatus(event.detail.clean
                         ? 'Disconnected.'
-                        : 'Connection failed or was interrupted. Check the VNC server and local network permissions.'))
+                        : 'Connection failed or was interrupted. Check the VNC server and local network permissions.')
                 }
             })
         }).catch(error => {
-            if (!disposed) setStatus(`Connection failed: ${String(error)}`)
+            if (!disposed) {
+                setStatus(`Connection failed: ${String(error)}`)
+                setRetryable(true)
+            }
             if (tunnelId) void Stop(tunnelId).catch(console.error)
         })
 
         return () => {
             disposed = true
             client.current = null
-            rfb?.disconnect()
+            if (!disconnected) rfb?.disconnect()
             if (tunnelId) void Stop(tunnelId).catch(console.error)
         }
-    }, [session.id])
+    }, [session.id, attempt])
 
     return (
         <div ref={desktop} className={`vnc-desktop ${fullscreen ? 'vnc-desktop-fullscreen' : ''}`}
@@ -160,6 +210,7 @@ function Desktop({session, active}: {session: Session; active: boolean}) {
             <div className="vnc-toolbar">
                 <span role="status">{status}</span>
                 <div className="vnc-toolbar-actions">
+                    {retryable && <button type="button" className="secondary" onClick={() => setAttempt(value => value + 1)}>Retry</button>}
                     <button type="button" className="secondary" disabled={status !== 'Connected'}
                             onClick={takeScreenshot}>Screenshot</button>
                     <button type="button" className="secondary" disabled={status !== 'Connected'}
@@ -179,6 +230,29 @@ function Desktop({session, active}: {session: Session; active: boolean}) {
             </div>
             {fullscreenError && <p className="vnc-fullscreen-error" role="alert">{fullscreenError}</p>}
             {screenshotError && <p className="vnc-fullscreen-error" role="alert">{screenshotError}</p>}
+            {passwordPrompt && (
+                <form className="vnc-password-prompt" onSubmit={event => {
+                    event.preventDefault()
+                    lastPassword.current = passwordInput
+                    setPasswordInput('')
+                    setPasswordPrompt(false)
+                    setStatus('Connecting...')
+                    if (awaitingPassword.current && client.current) {
+                        awaitingPassword.current = false
+                        passwordSent.current = true
+                        client.current.sendCredentials({password: lastPassword.current})
+                    } else {
+                        setAttempt(value => value + 1)
+                    }
+                }}>
+                    <label>
+                        VNC password
+                        <input name="password" type="password" autoComplete="current-password" required autoFocus
+                               value={passwordInput} onChange={event => setPasswordInput(event.target.value)}/>
+                    </label>
+                    <button type="submit" className="primary">Try password</button>
+                </form>
+            )}
             <div className="vnc-screen" ref={screen} aria-label={`Remote desktop ${session.host}`}/>
             {snapshot && <ScreenshotEditor snapshot={snapshot} onClose={() => setSnapshot(null)}/>}
         </div>
@@ -186,22 +260,20 @@ function Desktop({session, active}: {session: Session; active: boolean}) {
 }
 
 export default function VNCPlugin() {
-    const [host, setHost] = useState('')
-    const [port, setPort] = useState('5900')
-    const [password, setPassword] = useState('')
     const [sessions, setSessions] = useState<Session[]>([])
     const [active, setActive] = useState('new')
+    const [message, setMessage] = useState('')
 
-    const connect = () => {
-        const session = {id: crypto.randomUUID(), host: host.trim(), port: Number(port), password}
+    const connect = (details: Omit<Session, 'id'>) => {
+        const session = {id: crypto.randomUUID(), ...details}
         setSessions(current => [...current, session])
         setActive(session.id)
-        setPassword('')
+        setMessage('')
     }
 
     const close = (id: string) => {
         setSessions(current => current.filter(session => session.id !== id))
-        if (active === id) setActive('new')
+        setActive(current => current === id ? 'new' : current)
     }
 
     return (
@@ -220,34 +292,17 @@ export default function VNCPlugin() {
                 <button type="button" className={`session-add ${active === 'new' ? 'active' : ''}`}
                         aria-label="New VNC connection" onClick={() => setActive('new')}>+</button>
             </div>
+            {message && <div className="vnc-session-message" role="alert">
+                {message}
+                <button type="button" className="secondary" onClick={() => setMessage('')}>Dismiss</button>
+            </div>}
             <div className="vnc-body">
-                {active === 'new' && (
-                    <form className="vnc-form" aria-labelledby="vnc-heading" onSubmit={event => {
-                        event.preventDefault()
-                        connect()
-                    }}>
-                        <h2 id="vnc-heading">New VNC connection</h2>
-                        <label>
-                            Host (required)
-                            <input name="host" required value={host} placeholder="192.168.1.10"
-                                   autoCapitalize="none" spellCheck={false}
-                                   onChange={event => setHost(event.target.value)}/>
-                        </label>
-                        <label>
-                            Port (required)
-                            <input name="port" type="number" min="1" max="65535" required value={port}
-                                   onChange={event => setPort(event.target.value)}/>
-                        </label>
-                        <label>
-                            VNC password (optional)
-                            <input name="password" type="password" autoComplete="current-password" value={password}
-                                   onChange={event => setPassword(event.target.value)}/>
-                        </label>
-                        <p>Standard VNC traffic is not encrypted. Use a trusted network, VPN, or secure tunnel.</p>
-                        <button type="submit" className="primary">Connect</button>
-                    </form>
-                )}
-                {sessions.map(session => <Desktop key={session.id} session={session} active={active === session.id}/>)}
+                {active === 'new' && <VNCConnections onConnect={connect}/>}
+                {sessions.map(session => <Desktop key={session.id} session={session} active={active === session.id}
+                    onAuthLimit={() => {
+                        setMessage(`Session ${session.host}:${session.port} closed after three incorrect password attempts.`)
+                        close(session.id)
+                    }}/>)}
             </div>
         </div>
     )

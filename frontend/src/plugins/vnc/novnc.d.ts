@@ -12,6 +12,7 @@ declare module '@novnc/novnc' {
         scaleViewport: boolean
         addEventListener<K extends keyof RFBEvents>(type: K, listener: (event: RFBEvents[K]) => void): void
         disconnect(): void
+        sendCredentials(credentials: {password: string}): void
         sendCtrlAltDel(): void
         getImageData(): ImageData
     }

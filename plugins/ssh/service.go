@@ -46,12 +46,14 @@ type Service struct {
 	ctx      context.Context
 	mu       sync.Mutex
 	sessions map[string]*session
+	browsers map[string]*browserSession
+	closed   bool
 	hosts    *hostKeys
 	logins   *loginStore
 }
 
 func newService() *Service {
-	return &Service{sessions: map[string]*session{}, hosts: newHostKeys(), logins: newLoginStore()}
+	return &Service{sessions: map[string]*session{}, browsers: map[string]*browserSession{}, hosts: newHostKeys(), logins: newLoginStore()}
 }
 
 // ListLogins returns saved logins (without secrets).
@@ -92,26 +94,13 @@ func authMethods(req ConnectRequest) ([]gossh.AuthMethod, error) {
 	}, nil
 }
 
-// Connect opens an interactive shell. The frontend supplies the session id so it
-// can subscribe to "ssh:data:<id>" and "ssh:closed:<id>" before output arrives.
-func (s *Service) Connect(id string, req ConnectRequest) error {
-	if id == "" || req.Host == "" || req.Username == "" {
-		return errors.New("host and username are required")
+func (s *Service) dial(req ConnectRequest) (*gossh.Client, error) {
+	if req.Host == "" || req.Username == "" {
+		return nil, errors.New("host and username are required")
 	}
 	if req.Port == 0 {
 		req.Port = 22
 	}
-	if req.Cols <= 0 || req.Rows <= 0 {
-		req.Cols, req.Rows = 80, 24
-	}
-
-	s.mu.Lock()
-	if _, exists := s.sessions[id]; exists {
-		s.mu.Unlock()
-		return errors.New("session already exists")
-	}
-	s.mu.Unlock()
-
 	if req.SavedID != "" {
 		secret := secretFor(req.SavedID)
 		if req.AuthMethod == "key" && req.Passphrase == "" {
@@ -123,7 +112,7 @@ func (s *Service) Connect(id string, req ConnectRequest) error {
 
 	auth, err := authMethods(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	cfg := &gossh.ClientConfig{
 		User:            req.Username,
@@ -132,7 +121,25 @@ func (s *Service) Connect(id string, req ConnectRequest) error {
 		Timeout:         15 * time.Second,
 	}
 	addr := net.JoinHostPort(req.Host, strconv.Itoa(req.Port))
-	client, err := gossh.Dial("tcp", addr, cfg)
+	return gossh.Dial("tcp", addr, cfg)
+}
+
+// Connect opens an interactive shell. The frontend supplies the session id so it
+// can subscribe to "ssh:data:<id>" and "ssh:closed:<id>" before output arrives.
+func (s *Service) Connect(id string, req ConnectRequest) error {
+	if id == "" {
+		return errors.New("session id is required")
+	}
+	if req.Cols <= 0 || req.Rows <= 0 {
+		req.Cols, req.Rows = 80, 24
+	}
+	s.mu.Lock()
+	if _, exists := s.sessions[id]; exists {
+		s.mu.Unlock()
+		return errors.New("session already exists")
+	}
+	s.mu.Unlock()
+	client, err := s.dial(req)
 	if err != nil {
 		return err
 	}
@@ -247,12 +254,20 @@ func (s *Service) Disconnect(id string) {
 
 func (s *Service) closeAll() {
 	s.mu.Lock()
+	s.closed = true
 	ids := make([]string, 0, len(s.sessions))
 	for id := range s.sessions {
 		ids = append(ids, id)
 	}
+	browserIDs := make([]string, 0, len(s.browsers))
+	for id := range s.browsers {
+		browserIDs = append(browserIDs, id)
+	}
 	s.mu.Unlock()
 	for _, id := range ids {
 		s.remove(id)
+	}
+	for _, id := range browserIDs {
+		s.DisconnectBrowser(id)
 	}
 }

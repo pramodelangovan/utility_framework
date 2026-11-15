@@ -6,6 +6,10 @@ export function Connect(arg1, arg2) {
   return window['go']['ssh']['Service']['Connect'](arg1, arg2);
 }
 
+export function ConnectBrowser(arg1, arg2) {
+  return window['go']['ssh']['Service']['ConnectBrowser'](arg1, arg2);
+}
+
 export function DeleteLogin(arg1) {
   return window['go']['ssh']['Service']['DeleteLogin'](arg1);
 }
@@ -14,8 +18,32 @@ export function Disconnect(arg1) {
   return window['go']['ssh']['Service']['Disconnect'](arg1);
 }
 
+export function DisconnectBrowser(arg1) {
+  return window['go']['ssh']['Service']['DisconnectBrowser'](arg1);
+}
+
+export function DownloadFile(arg1, arg2) {
+  return window['go']['ssh']['Service']['DownloadFile'](arg1, arg2);
+}
+
+export function ListDirectory(arg1, arg2) {
+  return window['go']['ssh']['Service']['ListDirectory'](arg1, arg2);
+}
+
 export function ListLogins() {
   return window['go']['ssh']['Service']['ListLogins']();
+}
+
+export function PlayVideo(arg1, arg2) {
+  return window['go']['ssh']['Service']['PlayVideo'](arg1, arg2);
+}
+
+export function ReadImage(arg1, arg2) {
+  return window['go']['ssh']['Service']['ReadImage'](arg1, arg2);
+}
+
+export function ReadTextChunk(arg1, arg2, arg3) {
+  return window['go']['ssh']['Service']['ReadTextChunk'](arg1, arg2, arg3);
 }
 
 export function Resize(arg1, arg2, arg3) {
@@ -24,6 +52,18 @@ export function Resize(arg1, arg2, arg3) {
 
 export function SaveLogin(arg1) {
   return window['go']['ssh']['Service']['SaveLogin'](arg1);
+}
+
+export function StartHTMLPreview(arg1, arg2) {
+  return window['go']['ssh']['Service']['StartHTMLPreview'](arg1, arg2);
+}
+
+export function StopHTMLPreview(arg1, arg2) {
+  return window['go']['ssh']['Service']['StopHTMLPreview'](arg1, arg2);
+}
+
+export function UploadFile(arg1, arg2) {
+  return window['go']['ssh']['Service']['UploadFile'](arg1, arg2);
 }
 
 export function Write(arg1, arg2) {

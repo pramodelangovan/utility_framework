@@ -211,6 +211,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    flex-wrap: wrap;
     gap: 12px;
     min-block-size: 48px;
     padding: 6px 10px;
@@ -218,6 +219,8 @@
 }
 
 .saved-head h2 {
+    flex: 1 0 max-content;
+    max-inline-size: 100%;
     margin: 0;
     color: var(--text-active);
     font-family: var(--font-mono);
@@ -226,6 +229,11 @@
     letter-spacing: 0.16em;
     text-transform: uppercase;
     text-wrap: balance;
+}
+
+.saved-head button {
+    flex: 0 0 auto;
+    white-space: nowrap;
 }
 
 .muted {

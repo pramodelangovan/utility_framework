@@ -16,6 +16,12 @@ function App() {
         localStorage.setItem('theme', theme)
     }, [theme])
 
+    useEffect(() => {
+        const preventContextMenu = (event: MouseEvent) => event.preventDefault()
+        document.addEventListener('contextmenu', preventContextMenu, true)
+        return () => document.removeEventListener('contextmenu', preventContextMenu, true)
+    }, [])
+
     return (
         <div className="app">
             <aside className="sidebar">

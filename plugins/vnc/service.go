@@ -28,6 +28,7 @@ type Service struct {
 	mu       sync.Mutex
 	sessions map[string]*tunnel
 	closed   bool
+	logins   *loginStore
 }
 
 type tunnel struct {
@@ -44,7 +45,7 @@ type tunnel struct {
 }
 
 func newService() *Service {
-	return &Service{sessions: make(map[string]*tunnel)}
+	return &Service{sessions: make(map[string]*tunnel), logins: newLoginStore()}
 }
 
 // Start opens the VNC connection and a one-use, loopback-only WebSocket bridge.

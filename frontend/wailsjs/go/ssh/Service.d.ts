@@ -4,14 +4,34 @@ import {ssh} from '../models';
 
 export function Connect(arg1:string,arg2:ssh.ConnectRequest):Promise<void>;
 
+export function ConnectBrowser(arg1:string,arg2:ssh.ConnectRequest):Promise<ssh.Directory>;
+
 export function DeleteLogin(arg1:string):Promise<void>;
 
 export function Disconnect(arg1:string):Promise<void>;
 
+export function DisconnectBrowser(arg1:string):Promise<void>;
+
+export function DownloadFile(arg1:string,arg2:string):Promise<string>;
+
+export function ListDirectory(arg1:string,arg2:string):Promise<ssh.Directory>;
+
 export function ListLogins():Promise<Array<ssh.Login>>;
+
+export function PlayVideo(arg1:string,arg2:string):Promise<boolean>;
+
+export function ReadImage(arg1:string,arg2:string):Promise<string>;
+
+export function ReadTextChunk(arg1:string,arg2:string,arg3:number):Promise<ssh.TextChunk>;
 
 export function Resize(arg1:string,arg2:number,arg3:number):Promise<void>;
 
 export function SaveLogin(arg1:ssh.SaveLoginRequest):Promise<ssh.Login>;
+
+export function StartHTMLPreview(arg1:string,arg2:string):Promise<string>;
+
+export function StopHTMLPreview(arg1:string,arg2:string):Promise<void>;
+
+export function UploadFile(arg1:string,arg2:string):Promise<string>;
 
 export function Write(arg1:string,arg2:string):Promise<void>;

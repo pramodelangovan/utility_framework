@@ -1,9 +1,8 @@
-import {useEffect, useState} from 'react'
-import {ConnectionDetails, SaveOptions} from './ConnectForm'
+import {useState} from 'react'
+import type {ConnectionDetails} from './ConnectForm'
 import NewConnection from './NewConnection'
 import TerminalView from './TerminalView'
-import {DeleteLogin, ListLogins, SaveLogin} from '../../../wailsjs/go/ssh/Service'
-import type {ssh} from '../../../wailsjs/go/models'
+import useSSHLogins from './useSSHLogins'
 import './ssh.css'
 
 interface Session {
@@ -17,13 +16,7 @@ const NEW = 'new'
 export default function SSHPlugin() {
     const [sessions, setSessions] = useState<Session[]>([])
     const [activeKey, setActiveKey] = useState<string>(NEW)
-    const [logins, setLogins] = useState<ssh.Login[]>([])
-    const [error, setError] = useState('')
-
-    const refresh = () => ListLogins().then(l => setLogins(l ?? [])).catch(e => setError(String(e)))
-    useEffect(() => {
-        refresh()
-    }, [])
+    const {logins, error, setError, save, remove} = useSSHLogins()
 
     const open = (details: ConnectionDetails) => {
         const id = crypto.randomUUID()
@@ -34,35 +27,6 @@ export default function SSHPlugin() {
     const close = (id: string) => {
         setSessions(s => s.filter(x => x.id !== id))
         if (activeKey === id) setActiveKey(NEW)
-    }
-
-    const save = async (d: ConnectionDetails, opts: SaveOptions) => {
-        setError('')
-        try {
-            const saved = await SaveLogin({
-                id: d.savedId ?? '',
-                name: opts.name,
-                host: d.host,
-                port: d.port,
-                username: d.username,
-                authMethod: d.authMethod,
-                privateKeyPath: d.privateKeyPath,
-                startupCommand: d.startupCommand,
-                hasSecret: false,
-                secret: d.authMethod === 'password' ? d.password : d.passphrase,
-                saveSecret: opts.saveSecret,
-            } as any)
-            await refresh()
-            return saved
-        } catch (e) {
-            setError(String(e))
-            return undefined
-        }
-    }
-
-    const remove = async (id: string) => {
-        await DeleteLogin(id).catch(e => setError(String(e)))
-        refresh()
     }
 
     return (

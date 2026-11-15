@@ -13,12 +13,33 @@
     overflow: auto;
 }
 
+.vnc-session-message {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px var(--spacing-page);
+    color: var(--danger);
+}
+
+.vnc-connections {
+    padding: var(--spacing-page);
+}
+
+.vnc-connection-columns {
+    display: flex;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: clamp(16px, 2vw, 26px);
+}
+
 .vnc-form {
     display: flex;
+    flex: 0 1 480px;
     flex-direction: column;
     gap: 16px;
+    inline-size: min(480px, 100%);
     max-inline-size: 480px;
-    margin: var(--spacing-page);
     padding: var(--spacing-page);
     border: 1px solid var(--border-line);
     background: var(--bg-card);
@@ -40,7 +61,8 @@
     gap: 6px;
 }
 
-.vnc-form input {
+.vnc-form input:not([type='checkbox']),
+.vnc-password-prompt input {
     min-inline-size: 0;
     min-block-size: 44px;
     padding: 9px 11px;
@@ -49,6 +71,25 @@
     color: var(--text-active);
     font-family: var(--font-mono);
     user-select: text;
+}
+
+.vnc-form .vnc-remember {
+    flex-direction: row;
+    align-items: center;
+}
+
+.vnc-password-prompt {
+    display: flex;
+    align-items: end;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 12px;
+}
+
+.vnc-password-prompt label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
 }
 
 .vnc-desktop {
@@ -110,9 +151,13 @@
 }
 
 .screenshot-dialog {
-    inline-size: min(1200px, 96vw);
-    max-inline-size: 96vw;
-    max-block-size: 94vh;
+    position: fixed;
+    inset: 0;
+    inline-size: 100vw;
+    block-size: 100vh;
+    max-inline-size: none;
+    max-block-size: none;
+    margin: 0;
     padding: 0;
     border: 1px solid var(--border-line);
     background: var(--bg-dark);
@@ -120,6 +165,8 @@
 }
 
 .screenshot-dialog:modal {
+    display: flex;
+    flex-direction: column;
     overscroll-behavior: contain;
 }
 
@@ -145,31 +192,52 @@
 
 .screenshot-content {
     display: flex;
-    align-items: flex-start;
+    flex: 1;
     gap: 16px;
+    min-block-size: 0;
     padding: 16px;
 }
 
 .screenshot-preview {
     flex: 1 1 500px;
     min-inline-size: 0;
+    min-block-size: 0;
     overflow: auto;
-    text-align: center;
+    overscroll-behavior: contain;
+}
+
+.screenshot-preview-pan,
+.screenshot-preview-pan .crop-overlay,
+.screenshot-preview-pan .crop-box,
+.screenshot-preview-pan .crop-handle {
+    cursor: grab;
+}
+
+.screenshot-preview-pan:active,
+.screenshot-preview-pan:active .crop-overlay,
+.screenshot-preview-pan:active .crop-box,
+.screenshot-preview-pan:active .crop-handle {
+    cursor: grabbing;
+}
+
+.screenshot-stage {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: 100%;
+    block-size: 100%;
 }
 
 .screenshot-image {
     position: relative;
-    display: inline-block;
-    max-inline-size: 100%;
+    flex: none;
     line-height: 0;
 }
 
 .screenshot-image img {
     display: block;
-    max-inline-size: 100%;
-    max-block-size: 65vh;
-    inline-size: auto;
-    block-size: auto;
+    inline-size: 100%;
+    block-size: 100%;
 }
 
 .crop-overlay {
@@ -221,12 +289,20 @@
     flex-direction: column;
     gap: 12px;
     min-inline-size: min(260px, 100%);
+    min-block-size: 0;
+    overflow: auto;
     font-size: 13px;
 }
 
 .screenshot-options p {
     margin: 0;
     line-height: 1.5;
+}
+
+.screenshot-zoom {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .screenshot-crop-toggle {
@@ -272,7 +348,15 @@
 
     .screenshot-preview,
     .screenshot-options {
-        flex: auto;
         inline-size: 100%;
+    }
+
+    .screenshot-preview {
+        flex: 1 1 auto;
+    }
+
+    .screenshot-options {
+        flex: 0 1 auto;
+        max-block-size: 45%;
     }
 }

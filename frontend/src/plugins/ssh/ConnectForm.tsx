@@ -21,6 +21,7 @@ interface Props {
     initial?: Partial<ConnectionDetails> & { name?: string; hasSecret?: boolean }
     onConnect: (details: ConnectionDetails) => void
     onSave: (details: ConnectionDetails, opts: SaveOptions) => void
+    files?: boolean
 }
 
 export const emptyDetails: ConnectionDetails = {
@@ -34,7 +35,7 @@ export const emptyDetails: ConnectionDetails = {
     startupCommand: '',
 }
 
-export default function ConnectForm({initial, onConnect, onSave}: Props) {
+export default function ConnectForm({initial, onConnect, onSave, files = false}: Props) {
     const [d, setD] = useState<ConnectionDetails>({...emptyDetails, ...initial})
     const [name, setName] = useState(initial?.name ?? '')
     const [saveSecret, setSaveSecret] = useState(!!initial?.hasSecret)
@@ -47,7 +48,10 @@ export default function ConnectForm({initial, onConnect, onSave}: Props) {
             className="ssh-form"
             onSubmit={e => {
                 e.preventDefault()
-                onConnect(d)
+                const matchesSaved = initial && d.host === initial.host && d.port === initial.port &&
+                    d.username === initial.username && d.authMethod === initial.authMethod &&
+                    d.privateKeyPath === initial.privateKeyPath
+                onConnect(files && !matchesSaved ? {...d, savedId: undefined} : d)
             }}
         >
             <h2>{d.savedId ? 'Edit login' : 'New SSH connection'}</h2>
@@ -90,11 +94,11 @@ export default function ConnectForm({initial, onConnect, onSave}: Props) {
                        placeholder={initial?.hasSecret ? '(saved - leave blank to keep)' : ''}
                        onChange={e => set(secretKey, e.target.value)}/>
             </label>
-            <label>
+            {!files && <label>
                 Run command on connect (optional)
                 <input value={d.startupCommand} placeholder="cd /var/log && ls"
                        onChange={e => set('startupCommand', e.target.value)}/>
-            </label>
+            </label>}
 
             <div className="save-box">
                 <label>

@@ -8,6 +8,7 @@ interface Props {
     onConnect: (details: ConnectionDetails) => void
     onSave: (details: ConnectionDetails, opts: SaveOptions) => Promise<ssh.Login | undefined>
     onDelete: (id: string) => void
+    files?: boolean
 }
 
 function toDetails(l: ssh.Login): ConnectionDetails {
@@ -23,7 +24,7 @@ function toDetails(l: ssh.Login): ConnectionDetails {
     }
 }
 
-export default function NewConnection({logins, onConnect, onSave, onDelete}: Props) {
+export default function NewConnection({logins, onConnect, onSave, onDelete, files = false}: Props) {
     const [quick, setQuick] = useState('')
     const [form, setForm] = useState<{ key: number; initial?: any } | null>(null)
 
@@ -50,7 +51,7 @@ export default function NewConnection({logins, onConnect, onSave, onDelete}: Pro
 
     return (
         <div className="new-conn">
-            <div className="quick">
+            {!files && <div className="quick">
                 <input
                     value={quick}
                     placeholder="Quick connect:  user@host[:port] [command]   or   ssh -p 22 -i key user@host"
@@ -59,7 +60,7 @@ export default function NewConnection({logins, onConnect, onSave, onDelete}: Pro
                     onKeyDown={e => e.key === 'Enter' && runQuick()}
                 />
                 <button type="button" className="primary" onClick={runQuick}>Go</button>
-            </div>
+            </div>}
 
             <div className="new-conn-cols">
                 <section className="saved">
@@ -72,9 +73,12 @@ export default function NewConnection({logins, onConnect, onSave, onDelete}: Pro
                         <div key={l.id} className="saved-item">
                             <button type="button" className="saved-info"
                                     aria-label={`Connect to ${l.name}`}
-                                    onClick={() => onConnect(toDetails(l))}>
+                                    onClick={() => {
+                                        if (files && !l.hasSecret) openForm({...toDetails(l), name: l.name, hasSecret: false})
+                                        else onConnect(toDetails(l))
+                                    }}>
                                 <strong>{l.name}</strong>
-                                <span>{l.username}@{l.host}:{l.port}{l.startupCommand ? ` · ${l.startupCommand}` : ''}</span>
+                                <span>{l.username}@{l.host}:{l.port}{!files && l.startupCommand ? ` · ${l.startupCommand}` : ''}</span>
                             </button>
                             <button type="button" title="Edit" aria-label={`Edit ${l.name}`}
                                     onClick={() => openForm({...toDetails(l), name: l.name, hasSecret: l.hasSecret})}>✎</button>
@@ -88,6 +92,7 @@ export default function NewConnection({logins, onConnect, onSave, onDelete}: Pro
                     <ConnectForm
                         key={form.key}
                         initial={form.initial}
+                        files={files}
                         onConnect={onConnect}
                         onSave={async (d, opts) => {
                             const saved = await onSave(d, opts)
