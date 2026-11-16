@@ -44,6 +44,35 @@ func findVLC() (string, bool) {
 	return "", false
 }
 
+func findPotPlayer() (string, bool) {
+	if runtime.GOOS != "windows" {
+		return "", false
+	}
+	names := []string{"PotPlayerMini64.exe", "PotPlayerMini.exe", "PotPlayer64.exe", "PotPlayer.exe"}
+	for _, name := range names {
+		if executable, err := exec.LookPath(name); err == nil {
+			return executable, true
+		}
+	}
+	locations := []string{
+		filepath.Join("DAUM", "PotPlayer"), "PotPlayer",
+		filepath.Join("Programs", "DAUM", "PotPlayer"), filepath.Join("Programs", "PotPlayer"),
+	}
+	for _, variable := range []string{"ProgramFiles", "ProgramFiles(x86)", "ProgramW6432", "LOCALAPPDATA"} {
+		if dir := os.Getenv(variable); dir != "" {
+			for _, location := range locations {
+				for _, name := range names {
+					candidate := filepath.Join(dir, location, name)
+					if info, err := os.Stat(candidate); err == nil && info.Mode().IsRegular() {
+						return candidate, true
+					}
+				}
+			}
+		}
+	}
+	return "", false
+}
+
 func startVideoStream(files *sftp.Client, remote string) (*http.Server, string, error) {
 	file, err := files.Open(remote)
 	if err != nil {
@@ -109,6 +138,15 @@ func startVideoStream(files *sftp.Client, remote string) (*http.Server, string, 
 
 // PlayVideo streams a remote file to VLC. It returns false when VLC is not installed.
 func (s *Service) PlayVideo(id, remote string) (bool, error) {
+	return s.playVideo(id, remote, "VLC", findVLC)
+}
+
+// PlayVideoInPotPlayer streams a remote file to PotPlayer. It returns false when PotPlayer is not installed.
+func (s *Service) PlayVideoInPotPlayer(id, remote string) (bool, error) {
+	return s.playVideo(id, remote, "PotPlayer", findPotPlayer)
+}
+
+func (s *Service) playVideo(id, remote, player string, findPlayer func() (string, bool)) (bool, error) {
 	s.mu.Lock()
 	session := s.browsers[id]
 	if session == nil || session.sftp == nil {
@@ -117,7 +155,7 @@ func (s *Service) PlayVideo(id, remote string) (bool, error) {
 	}
 	files := session.sftp
 	s.mu.Unlock()
-	executable, found := findVLC()
+	executable, found := findPlayer()
 	if !found {
 		return false, nil
 	}
@@ -136,13 +174,13 @@ func (s *Service) PlayVideo(id, remote string) (bool, error) {
 	if err := cmd.Start(); err != nil {
 		s.mu.Unlock()
 		server.Close()
-		return false, fmt.Errorf("starting VLC: %w", err)
+		return false, fmt.Errorf("starting %s: %w", player, err)
 	}
 	session.streams = append(session.streams, server)
 	s.mu.Unlock()
 	go func() {
 		if err := cmd.Wait(); err != nil {
-			log.Printf("VLC exited with an error: %v", err)
+			log.Printf("%s exited with an error: %v", player, err)
 		}
 	}()
 	return true, nil

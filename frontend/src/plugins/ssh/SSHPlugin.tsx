@@ -1,4 +1,6 @@
 import {useState} from 'react'
+import SessionBar from '../SessionBar'
+import SessionTab from '../SessionTab'
 import type {ConnectionDetails} from './ConnectForm'
 import NewConnection from './NewConnection'
 import TerminalView from './TerminalView'
@@ -31,24 +33,17 @@ export default function SSHPlugin() {
 
     return (
         <div className="ssh">
-            <div className="session-bar">
+            <SessionBar sessionCount={sessions.length} activeKey={activeKey}>
                 {sessions.map(s => (
-                    <div key={s.id} className="session-tab-group">
-                        <button type="button" className={`session-tab ${activeKey === s.id ? 'active' : ''}`}
-                                title={s.title} onClick={() => setActiveKey(s.id)}>
-                            {s.title}
-                        </button>
-                        <button type="button" className="session-close" title="Close session"
-                                aria-label={`Close ${s.title} session`} onClick={() => {
-                            close(s.id)
-                        }}>×</button>
-                    </div>
+                    <SessionTab key={s.id} title={s.title} active={activeKey === s.id}
+                                closeLabel={`Close ${s.title} session`} onSelect={() => setActiveKey(s.id)}
+                                onClose={() => close(s.id)} onDuplicate={() => open(s.details)}/>
                 ))}
                 <button type="button" className={`session-add ${activeKey === NEW ? 'active' : ''}`} title="New connection"
                         aria-label="New connection"
                         onClick={() => setActiveKey(NEW)}>+
                 </button>
-            </div>
+            </SessionBar>
 
             <div className="ssh-body">
                 {activeKey === NEW && (

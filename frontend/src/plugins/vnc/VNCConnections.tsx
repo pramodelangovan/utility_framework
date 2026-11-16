@@ -1,6 +1,7 @@
 import {useEffect, useState} from 'react'
 import {DeleteLogin, GetLoginPassword, ListLogins, SaveLogin} from '../../../wailsjs/go/vnc/Service'
 import type {vnc} from '../../../wailsjs/go/models'
+import {useNotifications} from '../../NotificationContext'
 
 interface Details {
     host: string
@@ -9,6 +10,7 @@ interface Details {
 }
 
 export default function VNCConnections({onConnect}: {onConnect: (details: Details) => void}) {
+    const notify = useNotifications()
     const [logins, setLogins] = useState<vnc.Login[] | null>(null)
     const [editing, setEditing] = useState<vnc.Login | null>(null)
     const [host, setHost] = useState('')
@@ -44,7 +46,9 @@ export default function VNCConnections({onConnect}: {onConnect: (details: Detail
             onConnect({host: login?.host ?? host.trim(), port: login?.port ?? Number(port), password: resolved})
             setPassword('')
         } catch (reason) {
-            setError(`Could not open VNC login: ${String(reason)}`)
+            const message = `Could not open VNC login: ${String(reason)}`
+            setError(message)
+            notify(message, 'error')
         } finally {
             setBusy(false)
         }
@@ -53,14 +57,19 @@ export default function VNCConnections({onConnect}: {onConnect: (details: Detail
     const save = async () => {
         setBusy(true)
         setError('')
+        let savedLogin = false
         try {
             const saved = await SaveLogin({
                 id: editing?.id ?? '', name, host: host.trim(), port: Number(port), secret: password, saveSecret: remember,
             })
+            savedLogin = true
+            notify(`Saved VNC login ${saved.name}`)
             await refresh()
             edit(saved)
         } catch (reason) {
-            setError(`Could not save VNC login: ${String(reason)}`)
+            const message = `${savedLogin ? 'VNC login saved, but could not refresh logins' : 'Could not save VNC login'}: ${String(reason)}`
+            setError(message)
+            notify(message, 'error')
         } finally {
             setBusy(false)
         }
@@ -69,12 +78,17 @@ export default function VNCConnections({onConnect}: {onConnect: (details: Detail
     const remove = async (id: string) => {
         setBusy(true)
         setError('')
+        let deleted = false
         try {
             await DeleteLogin(id)
+            deleted = true
+            notify('Deleted VNC login')
             await refresh()
             if (editing?.id === id) edit(null)
         } catch (reason) {
-            setError(`Could not delete VNC login: ${String(reason)}`)
+            const message = `${deleted ? 'VNC login deleted, but could not refresh logins' : 'Could not delete VNC login'}: ${String(reason)}`
+            setError(message)
+            notify(message, 'error')
         } finally {
             setBusy(false)
         }

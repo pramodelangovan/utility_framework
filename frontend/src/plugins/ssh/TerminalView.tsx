@@ -5,6 +5,7 @@ import '@xterm/xterm/css/xterm.css'
 import {EventsOn} from '../../../wailsjs/runtime/runtime'
 import {Connect, Disconnect, Resize, Write} from '../../../wailsjs/go/ssh/Service'
 import type {ConnectionDetails} from './ConnectForm'
+import {useNotifications} from '../../NotificationContext'
 
 interface Props {
     id: string
@@ -20,10 +21,12 @@ function decode(b64: string): Uint8Array {
 }
 
 export default function TerminalView({id, details, active}: Props) {
+    const notify = useNotifications()
     const host = useRef<HTMLDivElement>(null)
     const termRef = useRef<Terminal | null>(null)
 
     useEffect(() => {
+        let disposed = false
         const term = new Terminal({
             cursorBlink: true,
             fontFamily: 'Cascadia Mono, Consolas, monospace',
@@ -43,8 +46,10 @@ export default function TerminalView({id, details, active}: Props) {
         term.write(`Connecting to ${details.username}@${details.host}:${details.port}...\r\n`)
 
         const offData = EventsOn('ssh:data:' + id, (b64: string) => term.write(decode(b64)))
-        const offClosed = EventsOn('ssh:closed:' + id, () =>
-            term.write('\r\n\x1b[33m[connection closed]\x1b[0m\r\n'))
+        const offClosed = EventsOn('ssh:closed:' + id, () => {
+            term.write('\r\n\x1b[33m[connection closed]\x1b[0m\r\n')
+            notify(`SSH connection closed: ${details.username}@${details.host}`)
+        })
         const input = term.onData(data => Write(id, data).catch(() => {}))
         const resize = term.onResize(({cols, rows}) => Resize(id, cols, rows).catch(() => {}))
         const observer = new ResizeObserver(doFit)
@@ -62,9 +67,17 @@ export default function TerminalView({id, details, active}: Props) {
             startupCommand: details.startupCommand,
             cols: term.cols,
             rows: term.rows,
-        }).catch(err => term.write(`\r\n\x1b[31mConnection failed: ${err}\x1b[0m\r\n`))
+        }).then(() => {
+            if (!disposed) notify(`SSH connected: ${details.username}@${details.host}`)
+        }).catch(err => {
+            if (!disposed) {
+                term.write(`\r\n\x1b[31mConnection failed: ${err}\x1b[0m\r\n`)
+                notify(`SSH connection failed: ${String(err)}`, 'error')
+            }
+        })
 
         return () => {
+            disposed = true
             observer.disconnect()
             input.dispose()
             resize.dispose()

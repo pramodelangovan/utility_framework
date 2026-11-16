@@ -10,6 +10,14 @@ export function ConnectBrowser(arg1, arg2) {
   return window['go']['ssh']['Service']['ConnectBrowser'](arg1, arg2);
 }
 
+export function CreateDirectory(arg1, arg2, arg3) {
+  return window['go']['ssh']['Service']['CreateDirectory'](arg1, arg2, arg3);
+}
+
+export function DeleteEntry(arg1, arg2, arg3) {
+  return window['go']['ssh']['Service']['DeleteEntry'](arg1, arg2, arg3);
+}
+
 export function DeleteLogin(arg1) {
   return window['go']['ssh']['Service']['DeleteLogin'](arg1);
 }
@@ -36,6 +44,10 @@ export function ListLogins() {
 
 export function PlayVideo(arg1, arg2) {
   return window['go']['ssh']['Service']['PlayVideo'](arg1, arg2);
+}
+
+export function PlayVideoInPotPlayer(arg1, arg2) {
+  return window['go']['ssh']['Service']['PlayVideoInPotPlayer'](arg1, arg2);
 }
 
 export function ReadImage(arg1, arg2) {

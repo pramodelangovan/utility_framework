@@ -68,6 +68,41 @@
     gap: 8px;
 }
 
+.file-vlc-dialog form {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.file-vlc-dialog input {
+    inline-size: min(100%, 360px);
+    min-block-size: 38px;
+    padding: 8px;
+    border: 1px solid var(--border-line);
+    background: var(--bg-dark);
+    color: var(--text-active);
+    user-select: text;
+}
+
+.file-entry-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.file-action-icon {
+    display: grid;
+    place-items: center;
+    min-inline-size: 38px;
+    padding: 8px;
+}
+
+.file-action-icon svg {
+    inline-size: 18px;
+    block-size: 18px;
+}
+
 .file-browser-toolbar,
 .file-browser-toolbar form {
     display: flex;
@@ -726,7 +761,7 @@
 
 @container (width < 850px) {
     .file-table thead,
-    .file-table td,
+    .file-table td:not(:nth-child(5)),
     .file-list-name .file-icon {
         display: none;
     }

@@ -3,6 +3,7 @@ import hljs from 'highlight.js'
 import {ReadTextChunk} from '../../../wailsjs/go/ssh/Service'
 import {findMatches, formatSize, includeSelectedMatch, isLogFile, isWholeWordMatch, languageForFile, searchFile} from './textViewerUtils'
 import type {SearchResult, TextMatch} from './textViewerUtils'
+import {useNotifications} from '../../NotificationContext'
 
 interface Decoration extends TextMatch {
     kind: 'search' | 'tag' | 'error' | 'warning' | 'info'
@@ -73,6 +74,7 @@ function decoratedTokens(tokens: Token[], decorations: Decoration[], current: nu
 }
 
 export default function TextViewer({sessionId, path, onClose}: {sessionId: string; path: string; onClose: () => void}) {
+    const notify = useNotifications()
     const [text, setText] = useState('')
     const [startOffset, setStartOffset] = useState(0)
     const [offset, setOffset] = useState(0)
@@ -132,7 +134,11 @@ export default function TextViewer({sessionId, path, onClose}: {sessionId: strin
                 setSize(expected)
             } while (all && alive.current && next < expected)
         } catch (reason) {
-            if (alive.current) setError(`Could not read file: ${String(reason)}`)
+            if (alive.current) {
+                const message = `Could not read file: ${String(reason)}`
+                setError(message)
+                notify(message, 'error')
+            }
         } finally {
             if (alive.current) setLoading(false)
         }
@@ -185,7 +191,9 @@ export default function TextViewer({sessionId, path, onClose}: {sessionId: strin
             setSearchStatus(`${result.total.toLocaleString()} ${result.total === 1 ? 'match' : 'matches'} in the whole file`)
         } catch (reason) {
             if (searchController.current === controller && alive.current) {
-                setSearchStatus(`Search failed: ${String(reason)}`)
+                const message = `Search failed: ${String(reason)}`
+                setSearchStatus(message)
+                notify(message, 'error')
             }
         } finally {
             if (searchController.current === controller && alive.current) {
@@ -245,7 +253,11 @@ export default function TextViewer({sessionId, path, onClose}: {sessionId: strin
             setSelectedMatch(target)
             setCurrent(selected)
         } catch (reason) {
-            if (alive.current) setError(`Could not open result: ${String(reason)}`)
+            if (alive.current) {
+                const message = `Could not open result: ${String(reason)}`
+                setError(message)
+                notify(message, 'error')
+            }
         } finally {
             if (alive.current) setLoading(false)
         }

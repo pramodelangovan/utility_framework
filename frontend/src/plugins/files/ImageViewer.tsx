@@ -1,6 +1,7 @@
 import {useEffect, useId, useRef, useState} from 'react'
 import {ReadImage} from '../../../wailsjs/go/ssh/Service'
 import {imageMimeType} from './textViewerUtils'
+import {useNotifications} from '../../NotificationContext'
 
 interface ImageSize {
     width: number
@@ -15,6 +16,7 @@ export default function ImageViewer({sessionId, path, images, onChange, onClose,
     onClose: () => void
     onDownload: (path: string) => Promise<{message: string; failed: boolean}>
 }) {
+    const notify = useNotifications()
     const [image, setImage] = useState<{path: string; source: string} | null>(null)
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(true)
@@ -44,6 +46,7 @@ export default function ImageViewer({sessionId, path, images, onChange, onClose,
         const type = imageMimeType(path)
         if (!type) {
             setError('Unsupported image type.')
+            notify('Unsupported image type.', 'error')
             setLoading(false)
             return
         }
@@ -51,7 +54,9 @@ export default function ImageViewer({sessionId, path, images, onChange, onClose,
             if (!cancelled) setImage({path, source: `data:${type};base64,${data}`})
         }).catch(reason => {
             if (!cancelled) {
-                setError(`Could not read image: ${String(reason)}`)
+                const message = `Could not read image: ${String(reason)}`
+                setError(message)
+                notify(message, 'error')
                 setLoading(false)
             }
         })
@@ -114,8 +119,11 @@ export default function ImageViewer({sessionId, path, images, onChange, onClose,
             })
             await navigator.clipboard.write([new ClipboardItem({'image/png': png})])
             setAction({path, message: 'Image copied to clipboard.', failed: false})
+            notify('Image copied to clipboard.')
         } catch (reason) {
-            setAction({path, message: `Could not copy image: ${String(reason)}`, failed: true})
+            const message = `Could not copy image: ${String(reason)}`
+            setAction({path, message, failed: true})
+            notify(message, 'error')
         }
     }
 
@@ -127,7 +135,9 @@ export default function ImageViewer({sessionId, path, images, onChange, onClose,
             const result = await onDownload(path)
             setAction({path, ...result})
         } catch (reason) {
-            setAction({path, message: `Download failed: ${String(reason)}`, failed: true})
+            const message = `Download failed: ${String(reason)}`
+            setAction({path, message, failed: true})
+            notify(message, 'error')
         } finally {
             setDownloading(false)
         }
@@ -185,7 +195,11 @@ export default function ImageViewer({sessionId, path, images, onChange, onClose,
                             setImageSize({width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight})
                             setLoading(false)
                         }}
-                        onError={() => { setError('Could not display this image.'); setLoading(false) }}/>}
+                        onError={() => {
+                            setError('Could not display this image.')
+                            notify('Could not display this image.', 'error')
+                            setLoading(false)
+                        }}/>}
                 </div>
             </div>
         </section>

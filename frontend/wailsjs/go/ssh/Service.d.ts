@@ -6,6 +6,10 @@ export function Connect(arg1:string,arg2:ssh.ConnectRequest):Promise<void>;
 
 export function ConnectBrowser(arg1:string,arg2:ssh.ConnectRequest):Promise<ssh.Directory>;
 
+export function CreateDirectory(arg1:string,arg2:string,arg3:string):Promise<void>;
+
+export function DeleteEntry(arg1:string,arg2:string,arg3:string):Promise<void>;
+
 export function DeleteLogin(arg1:string):Promise<void>;
 
 export function Disconnect(arg1:string):Promise<void>;
@@ -19,6 +23,8 @@ export function ListDirectory(arg1:string,arg2:string):Promise<ssh.Directory>;
 export function ListLogins():Promise<Array<ssh.Login>>;
 
 export function PlayVideo(arg1:string,arg2:string):Promise<boolean>;
+
+export function PlayVideoInPotPlayer(arg1:string,arg2:string):Promise<boolean>;
 
 export function ReadImage(arg1:string,arg2:string):Promise<string>;
 

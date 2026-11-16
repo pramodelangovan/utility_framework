@@ -1,10 +1,15 @@
 import {useEffect, useRef, useState} from 'react'
 import RFB from '@novnc/novnc'
 import {Start, Stop} from '../../../wailsjs/go/vnc/Service'
-import {WindowFullscreen, WindowIsFullscreen, WindowUnfullscreen} from '../../../wailsjs/runtime/runtime'
 import ScreenshotEditor from './ScreenshotEditor'
 import VNCConnections from './VNCConnections'
 import type {Snapshot} from './ScreenshotEditor'
+import SessionTab from '../SessionTab'
+import SessionBar from '../SessionBar'
+import {useFullscreen} from '../../FullscreenContext'
+import FullscreenBar from '../../FullscreenBar'
+import {FullscreenIcon, SidebarToggle} from '../../FullscreenIcons'
+import {useNotifications} from '../../NotificationContext'
 import './vnc.css'
 
 interface Session {
@@ -14,11 +19,15 @@ interface Session {
     password: string
 }
 
-function Desktop({session, active, onAuthLimit}: {session: Session; active: boolean; onAuthLimit: () => void}) {
+function Desktop({session, active, onAuthLimit, onAuthenticated}: {session: Session; active: boolean; onAuthLimit: () => void; onAuthenticated: (password: string) => void}) {
+    const notify = useNotifications()
     const desktop = useRef<HTMLDivElement>(null)
     const screen = useRef<HTMLDivElement>(null)
     const fullscreenButton = useRef<HTMLButtonElement>(null)
+    const restoreFullscreenFocus = useRef(false)
     const client = useRef<RFB | null>(null)
+    const fullscreenControls = useFullscreen()
+    const fullscreen = fullscreenControls.vncSession === session.id
     const [status, setStatus] = useState('Connecting...')
     const [retryable, setRetryable] = useState(false)
     const [passwordPrompt, setPasswordPrompt] = useState(false)
@@ -28,28 +37,25 @@ function Desktop({session, active, onAuthLimit}: {session: Session; active: bool
     const lastPassword = useRef(session.password)
     const awaitingPassword = useRef(false)
     const passwordSent = useRef(false)
-    const [fullscreen, setFullscreen] = useState(false)
     const [fullscreenError, setFullscreenError] = useState('')
-    const [fullscreenPending, setFullscreenPending] = useState(false)
     const [snapshot, setSnapshot] = useState<Snapshot | null>(null)
     const [screenshotError, setScreenshotError] = useState('')
-    const restoreWindow = useRef(false)
-    const mounted = useRef(true)
-    const restoreButtonFocus = useRef(false)
+    const [controlError, setControlError] = useState('')
 
     useEffect(() => {
-        return () => {
-            mounted.current = false
-            if (restoreWindow.current) WindowUnfullscreen()
+        if (!fullscreenControls.pending && restoreFullscreenFocus.current) {
+            fullscreenButton.current?.focus({preventScroll: true})
+            restoreFullscreenFocus.current = false
         }
-    }, [])
+    }, [fullscreen, fullscreenControls.pending])
 
     useEffect(() => {
         if (!fullscreen || !desktop.current) return
         const siblings: {element: HTMLElement; inert: boolean}[] = []
         for (let element: HTMLElement | null = desktop.current; element && element !== document.body; element = element.parentElement) {
             for (const sibling of Array.from(element.parentElement?.children ?? [])) {
-                if (sibling instanceof HTMLElement && sibling !== element) {
+                if (sibling instanceof HTMLElement && sibling !== element && sibling.id !== 'module-sidebar' &&
+                    sibling.dataset.fullscreenControls !== 'vnc' && !sibling.hasAttribute('data-notifications')) {
                     siblings.push({element: sibling, inert: sibling.inert})
                     sibling.inert = true
                 }
@@ -59,34 +65,15 @@ function Desktop({session, active, onAuthLimit}: {session: Session; active: bool
             for (const sibling of siblings) sibling.element.inert = sibling.inert
         }
     }, [fullscreen])
-
-    useEffect(() => {
-        if (!fullscreenPending && restoreButtonFocus.current) {
-            fullscreenButton.current?.focus()
-            restoreButtonFocus.current = false
-        }
-    }, [fullscreenPending])
-
     const toggleFullscreen = async () => {
         setFullscreenError('')
-        restoreButtonFocus.current = true
-        setFullscreenPending(true)
         try {
-            if (fullscreen) {
-                if (restoreWindow.current) WindowUnfullscreen()
-                restoreWindow.current = false
-                setFullscreen(false)
-            } else {
-                const alreadyFullscreen = await WindowIsFullscreen()
-                if (!mounted.current) return
-                if (!alreadyFullscreen) WindowFullscreen()
-                restoreWindow.current = !alreadyFullscreen
-                setFullscreen(true)
-            }
+            if (fullscreen) fullscreenControls.exitVnc()
+            else await fullscreenControls.enterVnc(session.id)
         } catch (error) {
-            if (mounted.current) setFullscreenError(`Could not change fullscreen mode: ${String(error)}`)
-        } finally {
-            if (mounted.current) setFullscreenPending(false)
+            const message = `Could not change fullscreen mode: ${String(error)}`
+            setFullscreenError(message)
+            notify(message, 'error')
         }
     }
 
@@ -103,7 +90,22 @@ function Desktop({session, active, onAuthLimit}: {session: Session; active: bool
             context.putImageData(image, 0, 0)
             setSnapshot({data: canvas.toDataURL('image/png'), width: image.width, height: image.height})
         } catch (error) {
-            setScreenshotError(`Could not capture screenshot: ${String(error)}`)
+            const message = `Could not capture screenshot: ${String(error)}`
+            setScreenshotError(message)
+            notify(message, 'error')
+        }
+    }
+
+    const sendCtrlAltDel = () => {
+        setControlError('')
+        try {
+            if (!client.current) throw new Error('VNC session is not connected')
+            client.current.sendCtrlAltDel()
+            notify('Sent Ctrl+Alt+Del to VNC')
+        } catch (error) {
+            const message = `Could not send Ctrl+Alt+Del: ${String(error)}`
+            setControlError(message)
+            notify(message, 'error')
         }
     }
 
@@ -130,15 +132,18 @@ function Desktop({session, active, onAuthLimit}: {session: Session; active: bool
             rfb.scaleViewport = true
             rfb.addEventListener('connect', () => {
                 if (disposed) return
+                onAuthenticated(lastPassword.current)
                 failures.current = 0
                 setStatus('Connected')
                 setPasswordPrompt(false)
+                notify(`VNC connected: ${session.host}:${session.port}`)
             })
             rfb.addEventListener('credentialsrequired', event => {
                 if (disposed) return
                 if (event.detail.types.some(type => type !== 'password')) {
                     failureHandled = true
                     setStatus('This server requires credentials other than a VNC password, which are not supported.')
+                    notify(`VNC ${session.host}: unsupported authentication method`, 'error')
                     setRetryable(true)
                     rfb?.disconnect()
                 } else if (lastPassword.current) {
@@ -154,6 +159,7 @@ function Desktop({session, active, onAuthLimit}: {session: Session; active: bool
                 if (disposed) return
                 failureHandled = true
                 setStatus('This server requires identity verification, which is not supported.')
+                notify(`VNC ${session.host}: identity verification is not supported`, 'error')
                 setRetryable(true)
                 rfb?.disconnect()
             })
@@ -169,9 +175,11 @@ function Desktop({session, active, onAuthLimit}: {session: Session; active: bool
                         return
                     }
                     setStatus(`Incorrect password. ${3 - failures.current} attempt(s) remaining.`)
+                    notify(`VNC ${session.host}: incorrect password. ${3 - failures.current} attempt(s) remaining.`, 'error')
                     setPasswordPrompt(true)
                 } else {
                     setStatus(`Authentication failed${event.detail.reason ? `: ${event.detail.reason}` : '.'}`)
+                    notify(`VNC ${session.host}: authentication failed${event.detail.reason ? `: ${event.detail.reason}` : '.'}`, 'error')
                     setRetryable(true)
                 }
             })
@@ -184,12 +192,15 @@ function Desktop({session, active, onAuthLimit}: {session: Session; active: bool
                     setStatus(event.detail.clean
                         ? 'Disconnected.'
                         : 'Connection failed or was interrupted. Check the VNC server and local network permissions.')
+                    notify(`VNC ${session.host}: ${event.detail.clean ? 'disconnected' : 'connection failed or was interrupted'}`,
+                        event.detail.clean ? 'success' : 'error')
                 }
             })
         }).catch(error => {
             if (!disposed) {
                 setStatus(`Connection failed: ${String(error)}`)
                 setRetryable(true)
+                notify(`VNC ${session.host}: connection failed: ${String(error)}`, 'error')
             }
             if (tunnelId) void Stop(tunnelId).catch(console.error)
         })
@@ -202,34 +213,36 @@ function Desktop({session, active, onAuthLimit}: {session: Session; active: bool
         }
     }, [session.id, attempt])
 
-    return (
-        <div ref={desktop} className={`vnc-desktop ${fullscreen ? 'vnc-desktop-fullscreen' : ''}`}
-             hidden={!active} role={fullscreen ? 'dialog' : undefined}
-             aria-modal={fullscreen ? true : undefined}
-             aria-label={fullscreen ? `Fullscreen VNC desktop ${session.host}` : undefined}>
+    const toolbar = (
             <div className="vnc-toolbar">
+                {fullscreen && <SidebarToggle/>}
                 <span role="status">{status}</span>
                 <div className="vnc-toolbar-actions">
                     {retryable && <button type="button" className="secondary" onClick={() => setAttempt(value => value + 1)}>Retry</button>}
                     <button type="button" className="secondary" disabled={status !== 'Connected'}
                             onClick={takeScreenshot}>Screenshot</button>
                     <button type="button" className="secondary" disabled={status !== 'Connected'}
-                            onClick={() => client.current?.sendCtrlAltDel()}>Send Ctrl+Alt+Del</button>
-                    <button ref={fullscreenButton} type="button" className="secondary vnc-fullscreen-button" disabled={fullscreenPending}
+                            onClick={sendCtrlAltDel}>Send Ctrl+Alt+Del</button>
+                    <button ref={fullscreenButton} type="button" className="secondary vnc-fullscreen-button" disabled={fullscreenControls.pending}
                             aria-label={fullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
                             title={fullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-                            onClick={() => void toggleFullscreen()}>
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                             aria-hidden="true">
-                            {fullscreen
-                                ? <path d="M4 9h5V4M20 9h-5V4M4 15h5v5M20 15h-5v5"/>
-                                : <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>}
-                        </svg>
+                            onClick={event => {
+                                restoreFullscreenFocus.current = event.detail === 0
+                                void toggleFullscreen()
+                            }}>
+                        <FullscreenIcon active={fullscreen}/>
                     </button>
                 </div>
             </div>
-            {fullscreenError && <p className="vnc-fullscreen-error" role="alert">{fullscreenError}</p>}
+    )
+
+    return (
+        <div ref={desktop} className={`vnc-desktop ${fullscreen ? 'vnc-desktop-fullscreen' : ''}`} hidden={!active}>
+            {fullscreen ? <FullscreenBar label="VNC controls" portal>{toolbar}</FullscreenBar> : toolbar}
+            {(fullscreenError || (fullscreen && fullscreenControls.error)) &&
+                <p className="vnc-fullscreen-error" role="alert">{fullscreenError || fullscreenControls.error}</p>}
             {screenshotError && <p className="vnc-fullscreen-error" role="alert">{screenshotError}</p>}
+            {controlError && <p className="vnc-fullscreen-error" role="alert">{controlError}</p>}
             {passwordPrompt && (
                 <form className="vnc-password-prompt" onSubmit={event => {
                     event.preventDefault()
@@ -260,11 +273,32 @@ function Desktop({session, active, onAuthLimit}: {session: Session; active: bool
 }
 
 export default function VNCPlugin() {
+    const notify = useNotifications()
     const [sessions, setSessions] = useState<Session[]>([])
     const [active, setActive] = useState('new')
     const [message, setMessage] = useState('')
+    const fullscreenControls = useFullscreen()
+    const pendingCloses = useRef(new Set<string>())
+    const previousSelection = useRef<{module: string | undefined; appFullscreen: boolean; active: string} | null>(null)
+
+    useEffect(() => {
+        if (fullscreenControls.pending) return
+        const current = {module: fullscreenControls.activeModuleId, appFullscreen: fullscreenControls.appFullscreen, active}
+        const previous = previousSelection.current
+        previousSelection.current = current
+        const changed = !previous || previous.module !== current.module ||
+            previous.appFullscreen !== current.appFullscreen || previous.active !== current.active
+        if (!changed || current.module !== 'vnc' || !current.appFullscreen ||
+            active === 'new' || fullscreenControls.vncSession) return
+        void fullscreenControls.enterVnc(active).catch(error => {
+            const message = `Could not enter VNC fullscreen: ${String(error)}`
+            setMessage(message)
+            notify(message, 'error')
+        })
+    }, [active, fullscreenControls.activeModuleId, fullscreenControls.appFullscreen, fullscreenControls.pending])
 
     const connect = (details: Omit<Session, 'id'>) => {
+        if (fullscreenControls.pending) return
         const session = {id: crypto.randomUUID(), ...details}
         setSessions(current => [...current, session])
         setActive(session.id)
@@ -272,26 +306,47 @@ export default function VNCPlugin() {
     }
 
     const close = (id: string) => {
+        if (fullscreenControls.pending) {
+            pendingCloses.current.add(id)
+            return
+        }
+        if (fullscreenControls.vncSession === id) {
+            try {
+                fullscreenControls.exitVnc()
+            } catch (error) {
+                const message = `Could not exit VNC fullscreen: ${String(error)}`
+                setMessage(message)
+                notify(message, 'error')
+                return
+            }
+        }
         setSessions(current => current.filter(session => session.id !== id))
         setActive(current => current === id ? 'new' : current)
     }
 
+    useEffect(() => {
+        if (fullscreenControls.pending || pendingCloses.current.size === 0) return
+        const ids = Array.from(pendingCloses.current)
+        pendingCloses.current.clear()
+        ids.forEach(close)
+    }, [fullscreenControls.pending, fullscreenControls.vncSession])
+
     return (
         <div className="vnc">
-            <div className="session-bar">
+            <SessionBar sessionCount={sessions.length} activeKey={active}>
                 {sessions.map(session => (
-                    <div className="session-tab-group" key={session.id}>
-                        <button type="button" className={`session-tab ${active === session.id ? 'active' : ''}`}
-                                onClick={() => setActive(session.id)}>
-                            {session.host}:{session.port}
-                        </button>
-                        <button type="button" className="session-close" aria-label={`Close ${session.host} session`}
-                                onClick={() => close(session.id)}>×</button>
-                    </div>
+                    <SessionTab key={session.id} title={`${session.host}:${session.port}`} active={active === session.id}
+                                closeLabel={`Close ${session.host} session`} onSelect={() => {
+                                    if (!fullscreenControls.pending) setActive(session.id)
+                                }}
+                                onClose={() => close(session.id)} onDuplicate={() => connect({
+                                    host: session.host, port: session.port, password: session.password,
+                                })}/>
                 ))}
                 <button type="button" className={`session-add ${active === 'new' ? 'active' : ''}`}
+                        disabled={fullscreenControls.pending}
                         aria-label="New VNC connection" onClick={() => setActive('new')}>+</button>
-            </div>
+            </SessionBar>
             {message && <div className="vnc-session-message" role="alert">
                 {message}
                 <button type="button" className="secondary" onClick={() => setMessage('')}>Dismiss</button>
@@ -299,8 +354,12 @@ export default function VNCPlugin() {
             <div className="vnc-body">
                 {active === 'new' && <VNCConnections onConnect={connect}/>}
                 {sessions.map(session => <Desktop key={session.id} session={session} active={active === session.id}
+                    onAuthenticated={password => setSessions(current => current.map(item =>
+                        item.id === session.id ? {...item, password} : item))}
                     onAuthLimit={() => {
-                        setMessage(`Session ${session.host}:${session.port} closed after three incorrect password attempts.`)
+                        const message = `Session ${session.host}:${session.port} closed after three incorrect password attempts.`
+                        setMessage(message)
+                        notify(message, 'error')
                         close(session.id)
                     }}/>)}
             </div>

@@ -404,6 +404,77 @@ func (s *Service) ListDirectory(id, dir string) (Directory, error) {
 	return listDirectory(files, dir)
 }
 
+func remoteEntryPath(dir, name string) (string, error) {
+	if !path.IsAbs(dir) || name == "" || name == "." || name == ".." ||
+		strings.ContainsAny(name, "/\\\x00") {
+		return "", errors.New("a valid directory and single entry name are required")
+	}
+	return path.Join(dir, name), nil
+}
+
+// CreateDirectory creates a single remote directory without overwriting an entry.
+func (s *Service) CreateDirectory(id, dir, name string) error {
+	files, err := s.browser(id)
+	if err != nil {
+		return err
+	}
+	remote, err := remoteEntryPath(dir, name)
+	if err != nil {
+		return err
+	}
+	return createDirectory(files, remote)
+}
+
+func createDirectory(files *sftp.Client, remote string) error {
+	if err := files.Mkdir(remote); err != nil {
+		return fmt.Errorf("creating remote folder: %w", err)
+	}
+	return nil
+}
+
+// DeleteEntry deletes one remote entry, recursively for directories.
+func (s *Service) DeleteEntry(id, dir, name string) error {
+	files, err := s.browser(id)
+	if err != nil {
+		return err
+	}
+	remote, err := remoteEntryPath(dir, name)
+	if err != nil {
+		return err
+	}
+	return deleteRemoteEntry(files, remote)
+}
+
+func deleteRemoteEntry(files *sftp.Client, remote string) error {
+	info, err := files.Lstat(remote)
+	if err != nil {
+		return fmt.Errorf("reading remote entry %q: %w", remote, err)
+	}
+	if !info.IsDir() {
+		if err := files.Remove(remote); err != nil {
+			return fmt.Errorf("deleting remote entry %q: %w", remote, err)
+		}
+		return nil
+	}
+	children, err := files.ReadDir(remote)
+	if err != nil {
+		return fmt.Errorf("reading remote folder %q: %w", remote, err)
+	}
+	for _, child := range children {
+		childPath, err := remoteEntryPath(remote, child.Name())
+		if err != nil {
+			return fmt.Errorf("invalid entry in remote folder %q: %w", remote, err)
+		}
+		if err := deleteRemoteEntry(files, childPath); err != nil {
+			return err
+		}
+	}
+	if err := files.RemoveDirectory(remote); err != nil {
+		return fmt.Errorf("deleting remote folder %q: %w", remote, err)
+	}
+	return nil
+}
+
 // UploadFile selects one local file and uploads it without overwriting a remote file.
 func (s *Service) UploadFile(id, remoteDir string) (string, error) {
 	files, err := s.browser(id)

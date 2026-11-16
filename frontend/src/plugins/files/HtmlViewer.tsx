@@ -1,5 +1,6 @@
 import {useEffect, useId, useRef, useState} from 'react'
 import {StartHTMLPreview, StopHTMLPreview} from '../../../wailsjs/go/ssh/Service'
+import {useNotifications} from '../../NotificationContext'
 
 export default function HtmlViewer({sessionId, path, onClose, onViewSource}: {
     sessionId: string
@@ -7,6 +8,7 @@ export default function HtmlViewer({sessionId, path, onClose, onViewSource}: {
     onClose: () => void
     onViewSource: () => void
 }) {
+    const notify = useNotifications()
     const dialog = useRef<HTMLDialogElement>(null)
     const id = useId()
     const [address, setAddress] = useState('')
@@ -24,7 +26,11 @@ export default function HtmlViewer({sessionId, path, onClose, onViewSource}: {
                 setAddress(result)
             }
         }).catch(reason => {
-            if (!disposed) setError(`Could not open HTML preview: ${String(reason)}`)
+            if (!disposed) {
+                const message = `Could not open HTML preview: ${String(reason)}`
+                setError(message)
+                notify(message, 'error')
+            }
         })
         return () => {
             disposed = true

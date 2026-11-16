@@ -1,6 +1,7 @@
 import {useEffect, useLayoutEffect, useRef, useState} from 'react'
 import type {KeyboardEvent, PointerEvent} from 'react'
 import {SaveScreenshot} from '../../../wailsjs/go/vnc/Service'
+import {useNotifications} from '../../NotificationContext'
 
 export interface Snapshot {
     data: string
@@ -37,6 +38,7 @@ function rectangle(a: Point, b: Point, image: Snapshot): Crop {
 }
 
 export default function ScreenshotEditor({snapshot, onClose}: {snapshot: Snapshot; onClose: () => void}) {
+    const notify = useNotifications()
     const dialog = useRef<HTMLDialogElement>(null)
     const overlay = useRef<HTMLDivElement>(null)
     const preview = useRef<HTMLDivElement>(null)
@@ -231,14 +233,20 @@ export default function ScreenshotEditor({snapshot, onClose}: {snapshot: Snapsho
         setSavedPath('')
         if (cropEnabled && !crop) {
             setError('Draw a crop box or turn off cropping before saving.')
+            notify('Draw a crop box or turn off cropping before saving.', 'error')
             return
         }
         setSaving(true)
         try {
             const path = await SaveScreenshot(name, snapshot.data, crop ?? {x: 0, y: 0, width: 0, height: 0}, cropEnabled)
-            if (path) setSavedPath(path)
+            if (path) {
+                setSavedPath(path)
+                notify(`Saved screenshot to ${path}`)
+            }
         } catch (reason) {
-            setError(`Could not save screenshot: ${String(reason)}`)
+            const message = `Could not save screenshot: ${String(reason)}`
+            setError(message)
+            notify(message, 'error')
         } finally {
             setSaving(false)
         }

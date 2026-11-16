@@ -2,10 +2,12 @@ import {useEffect, useState} from 'react'
 import {DeleteLogin, ListLogins, SaveLogin} from '../../../wailsjs/go/ssh/Service'
 import type {ssh} from '../../../wailsjs/go/models'
 import type {ConnectionDetails, SaveOptions} from './ConnectForm'
+import {useNotifications} from '../../NotificationContext'
 
 const changed = 'ssh-logins-changed'
 
 export default function useSSHLogins() {
+    const notify = useNotifications()
     const [logins, setLogins] = useState<ssh.Login[]>([])
     const [error, setError] = useState('')
 
@@ -38,9 +40,11 @@ export default function useSSHLogins() {
                 secret: d.authMethod === 'password' ? d.password : d.passphrase, saveSecret: opts.saveSecret,
             })
             window.dispatchEvent(new Event(changed))
+            notify(`Saved SSH login ${saved.name}`)
             return saved
         } catch (reason) {
             setError(String(reason))
+            notify(`Could not save SSH login: ${String(reason)}`, 'error')
             return undefined
         }
     }
@@ -50,8 +54,10 @@ export default function useSSHLogins() {
         try {
             await DeleteLogin(id)
             window.dispatchEvent(new Event(changed))
+            notify('Deleted SSH login')
         } catch (reason) {
             setError(String(reason))
+            notify(`Could not delete SSH login: ${String(reason)}`, 'error')
         }
     }
 

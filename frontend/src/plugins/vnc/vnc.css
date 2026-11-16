@@ -119,10 +119,26 @@
     color: var(--text-muted);
 }
 
+.vnc-toolbar > [role='status'] {
+    flex: 1;
+    min-inline-size: 0;
+}
+
 .vnc-toolbar-actions {
     display: flex;
     align-items: center;
     gap: 8px;
+}
+
+@media (max-width: 720px) {
+    .vnc-toolbar,
+    .vnc-toolbar-actions {
+        flex-wrap: wrap;
+    }
+
+    .vnc-toolbar > [role='status'] {
+        flex-basis: 160px;
+    }
 }
 
 .vnc-fullscreen-button {

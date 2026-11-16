@@ -10,6 +10,28 @@ here: https://wails.io/docs/reference/project-config
 ## Plugins
 
 Each utility is a plugin and appears as a non-closable tab in the sidebar.
+Within SSH, Remote Files, and VNC, right-click an existing connection tab and
+select Duplicate tab to open a separate connection with the same settings.
+Remote Files also opens the duplicate at the same directory. The context-menu
+key or Shift+F10 opens the menu from a focused connection tab. With multiple
+connections, use the arrows at either end of the tab strip to scroll through
+tabs. Scrollbars are hidden; scrolling with a wheel, touchpad, or touch remains
+available.
+
+Use the fullscreen icon in the workspace header to expand the entire app.
+In application fullscreen and VNC fullscreen, move the pointer to the top edge
+or focus the reveal control to show the top bar; Pin keeps it visible. Use
+the hamburger icon to display module navigation. In application fullscreen,
+selecting VNC opens the selected connection in VNC fullscreen; if no connection
+is selected, it opens when a connection is selected. Switching modules from VNC
+fullscreen leaves the VNC view and restores the previous application fullscreen
+state.
+
+Completed operations and errors appear as dismissible notifications at the
+bottom left and disappear automatically. Use the bell icon beside the theme
+icon to review recent messages, including in fullscreen. Use Clear in the
+notification panel to remove its history without dismissing visible toasts.
+Notifications produced while a modal is open appear after it closes.
 
 To add one (say `foo`):
 
@@ -37,13 +59,16 @@ default; select "Show hidden files" to include them. Sort either view by name,
 size, modification time, or owner in ascending or descending order; folders
 remain first. Both views show folder and file icons; known code, log,
 text, and configuration files have type labels. Click a name or icon to open
-the folder or file, or select `..` to go to the parent folder. In list view,
-use the download button to download a file.
-Alternatively, right-click an entry in either view and select Open or, for a
-file, Download. The context menu also opens with the context-menu key or
+the folder or file, or select `..` to go to the parent folder. Use New folder
+to create a folder in the current directory. List-view icons provide view,
+download and delete actions; right-click an entry in either view for text
+actions. Deletion requires confirmation and permanently removes folders and
+their contents; symbolic links are removed without traversing their targets.
+If an operation fails, the error remains visible in the explorer.
+The context menu also opens with the context-menu key or
 Shift+F10. The default context menu is disabled elsewhere in the app.
 These view options apply to the current file session.
-In narrow list views only names are shown; use the context menu to download.
+In narrow list views metadata is hidden, but entry actions remain available.
 Use Find files or Ctrl+F to highlight matching names in the current directory;
 Previous and Next move between visible matches. Search is case-insensitive and
 respects the hidden-files setting.
@@ -54,12 +79,13 @@ Some SFTP servers omit owner attributes; UID 0 is marked as potentially
 unavailable because the SFTP library cannot distinguish a missing UID from UID 0.
 The server must support the SFTP subsystem.
 
-Open a video (including MPG/MPEG, MP4, MKV, AVI and WebM) to stream it to a
-locally installed VLC player. Keep the file session and app open during playback;
-closing either stops the token-protected localhost HTTP stream. If VLC cannot be
-found, choose to open its official download page or download the video instead.
-VLC must be on the system PATH or installed in its standard Windows or macOS
-location.
+Open a video (including MPG/MPEG, MP4, MKV, AVI and WebM) and choose VLC or
+PotPlayer to stream it to the locally installed player. PotPlayer is supported
+on Windows; VLC can also be used on other systems. Keep the file session and app
+open during playback; closing either stops the token-protected localhost HTTP
+stream. If the chosen player cannot be found, open its official download page
+or download the video instead. Players must be on the system PATH or installed
+in a standard location.
 
 HTML and HTM files open as interactive webpages inside the app, with a View
 source option. The isolated preview runs scripts and can access the network and

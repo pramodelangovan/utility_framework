@@ -11,12 +11,54 @@
     display: flex;
     align-items: center;
     gap: 6px;
+    min-inline-size: 0;
     min-block-size: 48px;
-    padding: 6px var(--spacing-page);
+    padding: 2px var(--spacing-page);
     border-block-end: 1px solid var(--border-line);
     background: var(--bg-card);
+}
+
+.session-bar-scroll {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    padding-block: 4px;
     overflow-x: auto;
     overscroll-behavior-inline: contain;
+}
+
+.session-bar-items {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    inline-size: max-content;
+}
+
+.session-scroll-control {
+    display: grid;
+    flex: none;
+    place-items: center;
+    min-inline-size: 34px;
+    min-block-size: 34px;
+    padding: 7px;
+    border: 1px solid var(--border-line);
+    background: transparent;
+    color: var(--text-active);
+    cursor: pointer;
+}
+
+.session-scroll-control:hover:not([aria-disabled='true']) {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.session-scroll-control[aria-disabled='true'] {
+    color: var(--text-muted);
+    cursor: default;
+}
+
+.session-scroll-control svg {
+    inline-size: 18px;
+    block-size: 18px;
 }
 
 .session-tab-group {
@@ -97,6 +139,10 @@
 .terminal-host {
     inline-size: 100%;
     block-size: 100%;
+}
+
+.xterm .xterm-scrollable-element > .scrollbar {
+    visibility: hidden;
 }
 
 .primary,
@@ -465,6 +511,7 @@
     .session-tab,
     .session-add,
     .session-close,
+    .session-scroll-control,
     .primary,
     .secondary,
     .saved-item button {
@@ -472,6 +519,7 @@
     }
 
     .session-close,
+    .session-scroll-control,
     .saved-item button {
         min-inline-size: 44px;
     }

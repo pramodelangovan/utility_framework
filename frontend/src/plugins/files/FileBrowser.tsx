@@ -1,10 +1,12 @@
 import {useEffect, useId, useLayoutEffect, useMemo, useRef, useState} from 'react'
 import type {KeyboardEvent, MouseEvent} from 'react'
 import {createPortal} from 'react-dom'
-import {ConnectBrowser, DisconnectBrowser, DownloadFile, ListDirectory, PlayVideo, UploadFile} from '../../../wailsjs/go/ssh/Service'
+import {ConnectBrowser, CreateDirectory, DeleteEntry, DisconnectBrowser, DownloadFile, ListDirectory, PlayVideo, PlayVideoInPotPlayer, UploadFile} from '../../../wailsjs/go/ssh/Service'
 import type {ssh} from '../../../wailsjs/go/models'
 import {BrowserOpenURL} from '../../../wailsjs/runtime/runtime'
 import type {ConnectionDetails} from '../ssh/ConnectForm'
+import SessionTab from '../SessionTab'
+import SessionBar from '../SessionBar'
 import NewConnection from '../ssh/NewConnection'
 import useSSHLogins from '../ssh/useSSHLogins'
 import TextViewer from './TextViewer'
@@ -12,13 +14,17 @@ import ImageViewer from './ImageViewer'
 import HtmlViewer from './HtmlViewer'
 import {fileIconType, formatSize, imageMimeType, isVideoFile, matchingFileNames} from './textViewerUtils'
 import {visibleFileEntries} from './fileBrowserUtils'
+import {useNotifications} from '../../NotificationContext'
 import type {FileSort, SortDirection} from './fileBrowserUtils'
 import './files.css'
 
 interface Session {
     id: string
     details: ConnectionDetails
+    initialPath?: string
 }
+
+type VideoPlayer = 'vlc' | 'potplayer'
 
 interface FileContextMenu {
     name: string
@@ -51,19 +57,104 @@ function FileIcon({name, folder}: {name: string; folder: boolean}) {
     </span>
 }
 
-function VLCMissingDialog({onClose, onDownload}: {onClose: () => void; onDownload: () => void}) {
+function ActionIcon({action}: {action: 'view' | 'download' | 'delete'}) {
+    return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        {action === 'view' && <><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></>}
+        {action === 'download' && <path d="M12 3v12m-4-4 4 4 4-4M4 17v3h16v-3"/>}
+        {action === 'delete' && <path d="M4 6h16M9 6V4h6v2m3 0-1 14H7L6 6m4 4v6m4-6v6"/>}
+    </svg>
+}
+
+function FolderDialog({onClose, onCreate}: {onClose: () => void; onCreate: (name: string) => void}) {
+    const dialog = useRef<HTMLDialogElement>(null)
+    const id = useId()
+    const [name, setName] = useState('')
+    const [error, setError] = useState('')
+    useEffect(() => { dialog.current?.showModal() }, [])
+    return <dialog ref={dialog} className="file-vlc-dialog" aria-labelledby={`${id}-title`} onClose={onClose}>
+        <form onSubmit={event => {
+            event.preventDefault()
+            if (name === '.' || name === '..' || name.includes('/') || name.includes('\\')) {
+                setError('Enter a single folder name, not a path.')
+                return
+            }
+            dialog.current?.close()
+            onCreate(name)
+        }}>
+            <h2 id={`${id}-title`}>New folder</h2>
+            <label htmlFor={`${id}-name`}>Folder name</label>
+            <input id={`${id}-name`} value={name} onChange={event => { setName(event.target.value); setError('') }}
+                   required autoFocus aria-describedby={error ? `${id}-error` : undefined}/>
+            {error && <p id={`${id}-error`} className="file-browser-error" role="alert">{error}</p>}
+            <div className="file-vlc-actions">
+                <button type="submit" className="primary">Create folder</button>
+                <button type="button" className="secondary" onClick={() => dialog.current?.close()}>Cancel</button>
+            </div>
+        </form>
+    </dialog>
+}
+
+function DeleteDialog({name, isDir, onClose, onDelete}: {
+    name: string; isDir: boolean; onClose: () => void; onDelete: () => void
+}) {
+    const dialog = useRef<HTMLDialogElement>(null)
+    const id = useId()
+    useEffect(() => { dialog.current?.showModal() }, [])
+    return <dialog ref={dialog} className="file-vlc-dialog" aria-labelledby={`${id}-title`}
+                   aria-describedby={`${id}-description`} onClose={onClose}>
+        <h2 id={`${id}-title`}>Delete {isDir ? 'folder' : 'file'}?</h2>
+        <p id={`${id}-description`}>{isDir
+            ? `Permanently delete "${name}" and all of its contents? This cannot be undone.`
+            : `Permanently delete "${name}"? This cannot be undone.`}</p>
+        <div className="file-vlc-actions">
+            <button type="button" className="secondary" autoFocus onClick={() => dialog.current?.close()}>Cancel</button>
+            <button type="button" className="primary" onClick={() => {
+                dialog.current?.close()
+                onDelete()
+            }}>Delete</button>
+        </div>
+    </dialog>
+}
+
+function VideoPlayerDialog({name, onClose}: {name: string; onClose: (player: VideoPlayer | null) => void}) {
     const dialog = useRef<HTMLDialogElement>(null)
     const title = useId()
     useEffect(() => { dialog.current?.showModal() }, [])
 
+    return <dialog ref={dialog} className="file-vlc-dialog" aria-labelledby={title} onClose={event => {
+        const choice = event.currentTarget.returnValue
+        onClose(choice === 'vlc' || choice === 'potplayer' ? choice : null)
+    }}>
+        <form method="dialog">
+            <h2 id={title}>Choose a video player</h2>
+            <p>Play {name} with:</p>
+            <div className="file-vlc-actions">
+                <button type="submit" className="secondary" value="vlc" autoFocus>VLC</button>
+                <button type="submit" className="secondary" value="potplayer">PotPlayer</button>
+                <button type="submit" className="secondary" value="cancel">Cancel</button>
+            </div>
+        </form>
+    </dialog>
+}
+
+function MissingPlayerDialog({player, onClose, onDownload}: {
+    player: VideoPlayer; onClose: () => void; onDownload: () => void
+}) {
+    const dialog = useRef<HTMLDialogElement>(null)
+    const title = useId()
+    useEffect(() => { dialog.current?.showModal() }, [])
+    const name = player === 'vlc' ? 'VLC' : 'PotPlayer'
+
     return <dialog ref={dialog} className="file-vlc-dialog" aria-labelledby={title} onClose={onClose}>
-        <h2 id={title}>VLC player not found</h2>
-        <p>Install VLC to stream this video, or download the video to play it another way.</p>
+        <h2 id={title}>{name} not found</h2>
+        <p>Install {name} to stream this video, or download the video to play it another way.
+            {player === 'potplayer' && ' PotPlayer is available for Windows.'}</p>
         <div className="file-vlc-actions">
             <button type="button" className="secondary" onClick={() => {
-                BrowserOpenURL('https://www.videolan.org/vlc/')
+                BrowserOpenURL(player === 'vlc' ? 'https://www.videolan.org/vlc/' : 'https://potplayer.daum.net/')
                 dialog.current?.close()
-            }}>Download VLC</button>
+            }}>Download {name}</button>
             <button type="button" className="secondary" onClick={() => {
                 dialog.current?.close()
                 onDownload()
@@ -73,7 +164,8 @@ function VLCMissingDialog({onClose, onDownload}: {onClose: () => void; onDownloa
     </dialog>
 }
 
-function BrowserPane({session, active}: {session: Session; active: boolean}) {
+function BrowserPane({session, active, onDirectoryChange}: {session: Session; active: boolean; onDirectoryChange: (path: string) => void}) {
+    const notify = useNotifications()
     const [directory, setDirectory] = useState<ssh.Directory | null>(null)
     const [input, setInput] = useState('')
     const [error, setError] = useState('')
@@ -91,8 +183,11 @@ function BrowserPane({session, active}: {session: Session; active: boolean}) {
     const [findAnnouncement, setFindAnnouncement] = useState('')
     const [viewedFile, setViewedFile] = useState<string | null>(null)
     const [htmlSource, setHtmlSource] = useState(false)
-    const [missingVLCVideo, setMissingVLCVideo] = useState<string | null>(null)
+    const [videoChoice, setVideoChoice] = useState<{name: string; path: string} | null>(null)
+    const [missingPlayerVideo, setMissingPlayerVideo] = useState<{name: string; player: VideoPlayer} | null>(null)
     const [contextMenu, setContextMenu] = useState<FileContextMenu | null>(null)
+    const [newFolder, setNewFolder] = useState(false)
+    const [deleteTarget, setDeleteTarget] = useState<{name: string; isDir: boolean} | null>(null)
     const mounted = useRef(true)
     const paneRef = useRef<HTMLDivElement>(null)
     const tableRef = useRef<HTMLDivElement>(null)
@@ -103,6 +198,10 @@ function BrowserPane({session, active}: {session: Session; active: boolean}) {
     const menuAnchorRef = useRef<HTMLSpanElement>(null)
     const menuAnchorName = `--file-menu-${useId().replace(/[^a-zA-Z0-9-]/g, '')}`
     const supportsPopover = 'popover' in HTMLElement.prototype
+
+    useEffect(() => {
+        if (directory) onDirectoryChange(directory.path)
+    }, [directory, onDirectoryChange])
 
     useLayoutEffect(() => {
         const menu = menuRef.current
@@ -203,18 +302,25 @@ function BrowserPane({session, active}: {session: Session; active: boolean}) {
             authMethod: details.authMethod, password: details.password, privateKeyPath: details.privateKeyPath,
             passphrase: details.passphrase, savedId: details.savedId ?? '', startupCommand: '',
             cols: 0, rows: 0,
-        }).then(result => {
+        }).then(async result => {
             if (disposed) {
                 void DisconnectBrowser(session.id).catch(console.error)
                 return
             }
+            if (session.initialPath && session.initialPath !== result.path) {
+                result = await ListDirectory(session.id, session.initialPath)
+                if (disposed) return
+            }
             setDirectory(result)
             setInput(result.path)
             setStatus('Connected')
+            notify(`Connected to remote files: ${details.username}@${details.host}`)
         }).catch(reason => {
             if (!disposed) {
-                setError(`Connection failed: ${String(reason)}`)
+                const message = `Connection failed: ${String(reason)}`
+                setError(message)
                 setStatus('Disconnected')
+                notify(message, 'error')
             }
         }).finally(() => {
             if (!disposed) setBusy(false)
@@ -236,7 +342,11 @@ function BrowserPane({session, active}: {session: Session; active: boolean}) {
             setDirectory(result)
             setInput(result.path)
         } catch (reason) {
-            if (mounted.current) setError(`Could not open directory: ${String(reason)}`)
+            if (mounted.current) {
+                const message = `Could not open directory: ${String(reason)}`
+                setError(message)
+                notify(message, 'error')
+            }
         } finally {
             if (mounted.current) setBusy(false)
         }
@@ -254,13 +364,16 @@ function BrowserPane({session, active}: {session: Session; active: boolean}) {
             if (result) {
                 uploaded = true
                 setStatus(`Uploaded ${result}`)
+                notify(`Uploaded ${result}`)
                 const updated = await ListDirectory(session.id, directory.path)
                 if (mounted.current) setDirectory(updated)
             } else setStatus('Connected')
         } catch (reason) {
             if (mounted.current) {
                 if (!uploaded) setStatus('Transfer failed')
-                setError(`${uploaded ? 'Upload succeeded, but could not refresh directory' : 'Upload failed'}: ${String(reason)}`)
+                const message = `${uploaded ? 'Upload succeeded, but could not refresh directory' : 'Upload failed'}: ${String(reason)}`
+                setError(message)
+                notify(message, 'error')
             }
         } finally {
             if (mounted.current) setBusy(false)
@@ -274,13 +387,17 @@ function BrowserPane({session, active}: {session: Session; active: boolean}) {
         setStatus('Choose a download destination...')
         try {
             const result = await DownloadFile(session.id, remoteChild(directory.path, name))
-            if (mounted.current) setStatus(result ? `Downloaded to ${result}` : 'Connected')
+            if (mounted.current) {
+                setStatus(result ? `Downloaded to ${result}` : 'Connected')
+                if (result) notify(`Downloaded ${name} to ${result}`)
+            }
             return {message: result ? `Downloaded to ${result}` : 'Download cancelled.', failed: false}
         } catch (reason) {
             const message = `Download failed: ${String(reason)}`
             if (mounted.current) {
                 setStatus('Transfer failed')
                 setError(message)
+                notify(message, 'error')
             }
             return {message, failed: true}
         } finally {
@@ -288,22 +405,57 @@ function BrowserPane({session, active}: {session: Session; active: boolean}) {
         }
     }
 
-    const playVideo = async (name: string, path: string) => {
+    const playVideo = async (name: string, path: string, player: VideoPlayer) => {
+        const playerName = player === 'vlc' ? 'VLC' : 'PotPlayer'
         setBusy(true)
         setError('')
-        setStatus('Opening video in VLC...')
+        setStatus(`Opening video in ${playerName}...`)
         try {
-            const started = await PlayVideo(session.id, path)
+            const started = await (player === 'vlc' ? PlayVideo(session.id, path) : PlayVideoInPotPlayer(session.id, path))
             if (!mounted.current) return
-            if (started) setStatus(`Opened ${name} in VLC`)
+            if (started) {
+                setStatus(`Opened ${name} in ${playerName}`)
+                notify(`Opened ${name} in ${playerName}`)
+            }
             else {
-                setStatus('VLC player not found')
-                setMissingVLCVideo(name)
+                setStatus(`${playerName} not found`)
+                setMissingPlayerVideo({name, player})
             }
         } catch (reason) {
             if (mounted.current) {
                 setStatus('Could not open video')
-                setError(`Could not play video: ${String(reason)}`)
+                const message = `Could not play video in ${playerName}: ${String(reason)}`
+                setError(message)
+                notify(message, 'error')
+            }
+        } finally {
+            if (mounted.current) setBusy(false)
+        }
+    }
+
+    const changeEntry = async (name: string, operation: 'create' | 'delete', isDir = false) => {
+        if (!directory) return
+        setBusy(true)
+        setError('')
+        let changed = false
+        try {
+            if (operation === 'create') await CreateDirectory(session.id, directory.path, name)
+            else await DeleteEntry(session.id, directory.path, name)
+            changed = true
+            if (!mounted.current) return
+            const message = `${operation === 'create' ? 'Created folder' : 'Deleted'} ${name}`
+            setStatus(message)
+            notify(message)
+            const updated = await ListDirectory(session.id, directory.path)
+            if (mounted.current) setDirectory(updated)
+        } catch (reason) {
+            if (mounted.current) {
+                const message = changed
+                    ? `Operation succeeded, but could not refresh directory: ${String(reason)}`
+                    : `${operation === 'create' ? 'Could not create folder' : 'Could not delete entry'}: ${String(reason)}${operation === 'delete' && isDir ? ' Some contents may already have been deleted.' : ''}`
+                setError(message)
+                setStatus(changed ? 'Operation completed; refresh failed' : 'Operation failed')
+                notify(message, 'error')
             }
         } finally {
             if (mounted.current) setBusy(false)
@@ -318,7 +470,7 @@ function BrowserPane({session, active}: {session: Session; active: boolean}) {
         }
         const path = remoteChild(directory.path, name)
         if (isDir) void navigate(path)
-        else if (isVideoFile(name)) void playVideo(name, path)
+        else if (isVideoFile(name)) setVideoChoice({name, path})
         else {
             setHtmlSource(false)
             setViewedFile(path)
@@ -346,7 +498,7 @@ function BrowserPane({session, active}: {session: Session; active: boolean}) {
 
     useLayoutEffect(() => {
         const keyDown = (event: globalThis.KeyboardEvent) => {
-            if (!active || !directory || viewedFile || missingVLCVideo || event.defaultPrevented ||
+            if (!active || !directory || viewedFile || videoChoice || missingPlayerVideo || event.defaultPrevented ||
                 event.isComposing || event.altKey || event.shiftKey || !paneRef.current?.getClientRects().length ||
                 document.querySelector('dialog:modal')) return
             if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f') {
@@ -358,7 +510,7 @@ function BrowserPane({session, active}: {session: Session; active: boolean}) {
         }
         window.addEventListener('keydown', keyDown, true)
         return () => window.removeEventListener('keydown', keyDown, true)
-    }, [active, directory, viewedFile, missingVLCVideo])
+    }, [active, directory, viewedFile, videoChoice, missingPlayerVideo])
 
     useEffect(() => {
         if (active && showFind && matchNames.length) {
@@ -393,8 +545,18 @@ function BrowserPane({session, active}: {session: Session; active: boolean}) {
             }}>Reconnect</button>}
             {!directory && !busy && <button type="button" className="secondary"
                 onClick={() => setAttempt(value => value + 1)}>Retry connection</button>}
-            {missingVLCVideo && <VLCMissingDialog onClose={() => setMissingVLCVideo(null)}
-                onDownload={() => void download(missingVLCVideo)}/>}
+            {newFolder && <FolderDialog onClose={() => setNewFolder(false)}
+                onCreate={name => void changeEntry(name, 'create')}/>}
+            {deleteTarget && <DeleteDialog name={deleteTarget.name} isDir={deleteTarget.isDir}
+                onClose={() => setDeleteTarget(null)}
+                onDelete={() => void changeEntry(deleteTarget.name, 'delete', deleteTarget.isDir)}/>}
+            {videoChoice && <VideoPlayerDialog name={videoChoice.name} onClose={player => {
+                setVideoChoice(null)
+                if (player) void playVideo(videoChoice.name, videoChoice.path, player)
+            }}/>}
+            {missingPlayerVideo && <MissingPlayerDialog player={missingPlayerVideo.player}
+                onClose={() => setMissingPlayerVideo(null)}
+                onDownload={() => void download(missingPlayerVideo.name)}/>}
             {viewedFile && (imageMimeType(viewedFile)
                 ? <ImageViewer sessionId={session.id} path={viewedFile} images={images}
                     onChange={setViewedFile} onClose={() => setViewedFile(null)}
@@ -420,6 +582,8 @@ function BrowserPane({session, active}: {session: Session; active: boolean}) {
                                 onClick={() => void navigate(directory.path)}>Refresh</button>
                         <button type="button" className="primary" disabled={busy}
                                 onClick={() => void upload()}>Upload file</button>
+                        <button type="button" className="secondary" disabled={busy}
+                                onClick={() => setNewFolder(true)}>New folder</button>
                     </div>
                     <div className="file-browser-view-controls">
                         <div className="file-view-options" role="group" aria-label="File view">
@@ -514,9 +678,18 @@ function BrowserPane({session, active}: {session: Session; active: boolean}) {
                                     <td>{formatSize(entry.size)}</td>
                                     <td>{entry.modified}</td>
                                     <td>{entry.owner}</td>
-                                    <td>{!entry.isDir &&
-                                        <button type="button" className="secondary" disabled={busy}
-                                            aria-label={`Download ${entry.name}`} onClick={() => void download(entry.name)}>Download</button>}</td>
+                                    <td><div className="file-entry-actions">
+                                        <button type="button" className="secondary file-action-icon" disabled={busy}
+                                            title={entry.isDir ? 'Open folder' : 'View file'}
+                                            aria-label={`${entry.isDir ? 'Open' : 'View'} ${entry.name}`}
+                                            onClick={() => openEntry(entry.name, entry.isDir)}><ActionIcon action="view"/></button>
+                                        {!entry.isDir && <button type="button" className="secondary file-action-icon" disabled={busy}
+                                            title="Download" aria-label={`Download ${entry.name}`}
+                                            onClick={() => void download(entry.name)}><ActionIcon action="download"/></button>}
+                                        <button type="button" className="secondary file-action-icon" disabled={busy}
+                                            title="Delete" aria-label={`Delete ${entry.name}`}
+                                            onClick={() => setDeleteTarget({name: entry.name, isDir: entry.isDir})}><ActionIcon action="delete"/></button>
+                                    </div></td>
                                     <td className="file-permissions">{entry.permissions}</td>
                                 </tr>
                             ))}
@@ -570,7 +743,7 @@ function BrowserPane({session, active}: {session: Session; active: boolean}) {
                                 previousFocus?.focus({preventScroll: true})
                                 setContextMenu(null)
                                 openEntry(name, isDir)
-                            }}>Open</button>
+                            }}>{contextMenu.isDir ? 'Open' : 'View'}</button>
                     {!contextMenu.isDir && <button type="button" role="menuitem" tabIndex={-1}
                             onPointerMove={event => event.currentTarget.focus({preventScroll: true})}
                             onClick={() => {
@@ -579,6 +752,14 @@ function BrowserPane({session, active}: {session: Session; active: boolean}) {
                                 setContextMenu(null)
                                 void download(name)
                             }}>Download</button>}
+                    {contextMenu.name !== '..' && <button type="button" role="menuitem" tabIndex={-1}
+                            onPointerMove={event => event.currentTarget.focus({preventScroll: true})}
+                            onClick={() => {
+                                const {name, isDir, previousFocus} = contextMenu
+                                previousFocus?.focus({preventScroll: true})
+                                setContextMenu(null)
+                                setDeleteTarget({name, isDir})
+                            }}>Delete</button>}
                 </div>
             </>, document.body)}
         </div>
@@ -588,39 +769,40 @@ function BrowserPane({session, active}: {session: Session; active: boolean}) {
 export default function FileBrowser() {
     const [sessions, setSessions] = useState<Session[]>([])
     const [active, setActive] = useState('new')
+    const paths = useRef(new Map<string, string>())
     const {logins, error, setError, save, remove} = useSSHLogins()
 
-    const open = (details: ConnectionDetails) => {
+    const open = (details: ConnectionDetails, initialPath?: string) => {
         const id = crypto.randomUUID()
-        setSessions(current => [...current, {id, details}])
+        setSessions(current => [...current, {id, details, initialPath}])
         setActive(id)
     }
     const close = (id: string) => {
+        paths.current.delete(id)
         setSessions(current => current.filter(session => session.id !== id))
         setActive(current => current === id ? 'new' : current)
     }
 
     return (
         <div className="file-browser">
-            <div className="session-bar">
+            <SessionBar sessionCount={sessions.length} activeKey={active}>
                 {sessions.map(session => (
-                    <div className="session-tab-group" key={session.id}>
-                        <button type="button" className={`session-tab ${active === session.id ? 'active' : ''}`}
-                                onClick={() => setActive(session.id)}>{session.details.username}@{session.details.host}</button>
-                        <button type="button" className="session-close"
-                                aria-label={`Close ${session.details.username}@${session.details.host} file session`}
-                                onClick={() => close(session.id)}>×</button>
-                    </div>
+                    <SessionTab key={session.id} title={`${session.details.username}@${session.details.host}`}
+                                active={active === session.id}
+                                closeLabel={`Close ${session.details.username}@${session.details.host} file session`}
+                                onSelect={() => setActive(session.id)} onClose={() => close(session.id)}
+                                onDuplicate={() => open(session.details, paths.current.get(session.id))}/>
                 ))}
                 <button type="button" className={`session-add ${active === 'new' ? 'active' : ''}`}
                         aria-label="New file connection" onClick={() => setActive('new')}>+</button>
-            </div>
+            </SessionBar>
             <div className="file-browser-body">
                 {active === 'new' && <>
                     {error && <button type="button" className="ssh-error" onClick={() => setError('')}>{error}</button>}
                     <NewConnection files logins={logins} onConnect={open} onSave={save} onDelete={remove}/>
                 </>}
-                {sessions.map(session => <BrowserPane key={session.id} session={session} active={active === session.id}/>)}
+                {sessions.map(session => <BrowserPane key={session.id} session={session} active={active === session.id}
+                    onDirectoryChange={path => paths.current.set(session.id, path)}/>)}
             </div>
         </div>
     )

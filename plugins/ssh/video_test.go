@@ -3,6 +3,10 @@ package ssh
 import (
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -111,5 +115,65 @@ func TestPlayVideoWithoutVLC(t *testing.T) {
 	}
 	if _, err := service.PlayVideo("missing", "/movie.mpg"); err == nil {
 		t.Fatal("accepted a missing browser session")
+	}
+}
+
+func TestPlayVideoInPotPlayerWithoutPlayer(t *testing.T) {
+	for _, variable := range []string{"PATH", "ProgramFiles", "ProgramFiles(x86)", "ProgramW6432", "LOCALAPPDATA"} {
+		t.Setenv(variable, "")
+	}
+	service := newService()
+	service.browsers["video"] = &browserSession{sftp: testSFTP(t)}
+	started, err := service.PlayVideoInPotPlayer("video", "/movie.mpg")
+	if err != nil || started {
+		t.Fatalf("missing PotPlayer: started=%v, error=%v", started, err)
+	}
+	if _, err := service.PlayVideoInPotPlayer("missing", "/movie.mpg"); err == nil {
+		t.Fatal("accepted a missing browser session")
+	}
+}
+
+func TestFindPotPlayerAndReportLaunchFailure(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("PotPlayer is supported on Windows")
+	}
+	for _, variable := range []string{"PATH", "ProgramFiles(x86)", "ProgramW6432", "LOCALAPPDATA"} {
+		t.Setenv(variable, "")
+	}
+	dir := t.TempDir()
+	t.Setenv("ProgramFiles", dir)
+	player := filepath.Join(dir, "DAUM", "PotPlayer", "PotPlayerMini64.exe")
+	if err := os.MkdirAll(filepath.Dir(player), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(player, []byte("not an executable"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if found, ok := findPotPlayer(); !ok || found != player {
+		t.Fatalf("find PotPlayer: path=%q, found=%v", found, ok)
+	}
+	t.Setenv("PATH", filepath.Dir(player))
+	t.Setenv("ProgramFiles", "")
+	if found, ok := findPotPlayer(); !ok || found != player {
+		t.Fatalf("find PotPlayer on PATH: path=%q, found=%v", found, ok)
+	}
+	t.Setenv("PATH", "")
+	t.Setenv("ProgramFiles", dir)
+	files := testSFTP(t)
+	file, err := files.Create("/movie.mp4")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	service := newService()
+	service.browsers["video"] = &browserSession{sftp: files}
+	started, err := service.PlayVideoInPotPlayer("video", "/movie.mp4")
+	if started || err == nil || !strings.Contains(err.Error(), "starting PotPlayer") {
+		t.Fatalf("invalid player launch: started=%v, error=%v", started, err)
+	}
+	if len(service.browsers["video"].streams) != 0 {
+		t.Fatal("failed player launch retained a stream")
 	}
 }

@@ -106,6 +106,98 @@ func testSFTP(t *testing.T) *sftp.Client {
 	return client
 }
 
+type deniedFileCommands struct{}
+
+func (deniedFileCommands) Filecmd(*sftp.Request) error {
+	return os.ErrPermission
+}
+
+func TestRemoteFolderPermissionErrors(t *testing.T) {
+	serverConn, clientConn := net.Pipe()
+	handlers := sftp.InMemHandler()
+	handlers.FileCmd = deniedFileCommands{}
+	server := sftp.NewRequestServer(serverConn, handlers)
+	go server.Serve()
+	client, err := sftp.NewClientPipe(clientConn, clientConn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		client.Close()
+		server.Close()
+	})
+	if err := createDirectory(client, "/denied"); err == nil || !strings.Contains(err.Error(), "permission denied") {
+		t.Fatalf("folder creation did not report permission error: %v", err)
+	}
+	file, err := client.Create("/file")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := deleteRemoteEntry(client, "/file"); err == nil || !strings.Contains(err.Error(), "permission denied") {
+		t.Fatalf("deletion did not report permission error: %v", err)
+	}
+}
+
+func TestRemoteFolderOperations(t *testing.T) {
+	client := testSFTP(t)
+	folder, err := remoteEntryPath("/", "folder")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := createDirectory(client, folder); err != nil {
+		t.Fatal(err)
+	}
+	if err := createDirectory(client, folder); err == nil {
+		t.Fatal("created an existing folder")
+	}
+	for _, name := range []string{"", ".", "..", "a/b", "a\\b", "/"} {
+		if _, err := remoteEntryPath("/", name); err == nil {
+			t.Fatalf("accepted invalid name %q", name)
+		}
+	}
+	if _, err := remoteEntryPath("relative", "folder"); err == nil {
+		t.Fatal("accepted a relative directory")
+	}
+	if err := client.Mkdir("/folder/nested"); err != nil {
+		t.Fatal(err)
+	}
+	file, err := client.Create("/folder/nested/file")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := client.Mkdir("/outside"); err != nil {
+		t.Fatal(err)
+	}
+	outside, err := client.Create("/outside/keep")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := outside.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := client.Symlink("/outside", "/folder/nested/link"); err != nil {
+		t.Fatal(err)
+	}
+	if err := deleteRemoteEntry(client, folder); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.Lstat(folder); err == nil {
+		t.Fatal("folder still exists after recursive deletion")
+	}
+	if err := deleteRemoteEntry(client, folder); err == nil {
+		t.Fatal("missing entry deletion succeeded")
+	}
+	if _, err := client.Stat("/outside/keep"); err != nil {
+		t.Fatalf("followed a symbolic link while deleting: %v", err)
+	}
+}
+
 func TestReadTextChunk(t *testing.T) {
 	client := testSFTP(t)
 	file, err := client.Create("/text.log")

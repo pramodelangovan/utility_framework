@@ -28,6 +28,7 @@
     --font-sans: 'NeoBrutalismHost', 'Segoe UI', sans-serif;
     --font-mono: 'Cascadia Mono', 'SFMono-Regular', Consolas, monospace;
     --target-size: 32px;
+    --sidebar-width: 240px;
     --bg: var(--bg-dark);
     --panel: var(--bg-card);
     --text: var(--text-active);
@@ -62,6 +63,13 @@
 
 * {
     box-sizing: border-box;
+    scrollbar-width: none;
+}
+
+@supports not (scrollbar-width: none) {
+    *::-webkit-scrollbar {
+        display: none;
+    }
 }
 
 html,
@@ -113,13 +121,26 @@ input:focus-visible {
 
 .sidebar {
     display: flex;
-    flex: 0 0 240px;
+    flex: 0 0 var(--sidebar-width);
     flex-direction: column;
     gap: 20px;
     min-block-size: 0;
     padding: 20px 14px;
+    padding-block-end: 68px;
     border-inline-end: 1px solid var(--border-line);
     background: var(--bg-card);
+}
+
+.sidebar[hidden] {
+    display: none;
+}
+
+.app-vnc-fullscreen .sidebar {
+    position: fixed;
+    z-index: 120;
+    inset: 0 auto 0 0;
+    inline-size: var(--sidebar-width);
+    background: var(--bg-raised);
 }
 
 .brand {
@@ -224,23 +245,33 @@ input:focus-visible {
     white-space: nowrap;
 }
 
-.theme-toggle {
-    min-block-size: 40px;
-    padding: 8px 10px;
+.tab-context-menu {
+    position: fixed;
+    z-index: 10;
+    min-inline-size: 180px;
+    inset: auto;
+    margin: 0;
+    padding: 4px;
     border: 1px solid var(--border-line);
+    background: var(--bg-raised);
+    box-shadow: 0 8px 24px var(--shadow);
+}
+
+.tab-context-menu button {
+    inline-size: 100%;
+    min-block-size: 36px;
+    padding: 7px 10px;
+    border: 0;
     background: transparent;
-    color: var(--text-muted);
-    font-family: var(--font-mono);
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.1em;
+    color: var(--text-active);
+    font-size: 13px;
     text-align: start;
-    text-transform: uppercase;
     cursor: pointer;
 }
 
-.theme-toggle:hover {
-    border-color: var(--primary);
+.tab-context-menu button:hover,
+.tab-context-menu button:focus-visible {
+    background: rgb(0 212 255 / 9%);
     color: var(--primary);
 }
 
@@ -261,6 +292,264 @@ input:focus-visible {
     padding: 14px var(--spacing-page);
     border-block-end: 1px solid var(--border-line);
     background: rgb(7 9 14 / 82%);
+}
+
+.workspace-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.workspace-heading {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-inline-size: 0;
+}
+
+.fullscreen-icon-button {
+    display: grid;
+    flex: 0 0 auto;
+    place-items: center;
+    min-inline-size: 38px;
+    padding: 8px;
+}
+
+.fullscreen-icon-button svg {
+    inline-size: 18px;
+    block-size: 18px;
+}
+
+.fullscreen-bar {
+    position: fixed;
+    z-index: 130;
+    inset: 0 0 auto;
+    transform: translateY(calc(-100% + 24px));
+}
+
+.fullscreen-bar.pinned,
+.fullscreen-bar.revealed,
+.fullscreen-bar:hover,
+.fullscreen-bar:focus-within {
+    transform: none;
+}
+
+.fullscreen-bar-content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-inline-end: 8px;
+    border-block-end: 1px solid var(--border-line);
+    background: var(--bg-raised);
+}
+
+.fullscreen-bar-content > .workspace-header,
+.fullscreen-bar-content > .vnc-toolbar {
+    flex: 1;
+    min-inline-size: 0;
+    border: 0;
+}
+
+.fullscreen-bar-content > .workspace-header {
+    padding-inline-start: 8px;
+}
+
+.fullscreen-bar-reveal {
+    display: grid;
+    place-items: center;
+    min-inline-size: 72px;
+    min-block-size: 24px;
+    margin-inline: auto;
+    padding: 0;
+    border: 1px solid var(--border-line);
+    border-block-start: 0;
+    border-radius: 0 0 24px 24px;
+    background: var(--bg-raised);
+    color: var(--text-active);
+    cursor: pointer;
+}
+
+.fullscreen-bar-reveal svg {
+    inline-size: 18px;
+    block-size: 18px;
+}
+
+.fullscreen-pin[aria-pressed='true'] {
+    border-color: var(--primary);
+    color: var(--primary);
+    box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+.notifications {
+    position: fixed;
+    z-index: 10000;
+    inset: auto auto 12px 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    inline-size: min(var(--sidebar-width), 100vw);
+    max-block-size: calc(100vh - 24px);
+    margin: 0;
+    padding: 0;
+    overflow: visible;
+    border: 0;
+    background: transparent;
+    color: var(--text-active);
+    pointer-events: none;
+}
+
+.notifications > * {
+    pointer-events: auto;
+}
+
+.notification-announcement {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+}
+
+.toast-stack,
+.notification-history {
+    inline-size: 100%;
+    max-block-size: min(40vh, calc((100vh - 80px) / 2));
+    overflow: auto;
+}
+
+.toast {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    margin-block-end: 8px;
+    padding: 6px 8px;
+    border: 1px solid var(--primary);
+    background: var(--bg-raised);
+    box-shadow: 0 4px 16px var(--shadow);
+    font-size: 12px;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+}
+
+.toast-error {
+    border-color: var(--danger);
+}
+
+.toast-dismiss {
+    flex: none;
+    min-inline-size: 28px;
+    min-block-size: 28px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--text-active);
+    cursor: pointer;
+    font-size: 20px;
+}
+
+.notification-history {
+    padding: 8px 10px;
+    border: 1px solid var(--border-line);
+    background: var(--bg-raised);
+    font-size: 12px;
+}
+
+.notification-history[hidden] {
+    display: none;
+}
+
+.notification-history p {
+    margin: 0;
+}
+
+.notification-history-header {
+    position: sticky;
+    inset-block-start: -8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding-block-end: 4px;
+    background: var(--bg-raised);
+}
+
+.notification-history-clear {
+    min-block-size: var(--target-size);
+    padding: 2px 6px;
+    border: 1px solid var(--border-line);
+    background: transparent;
+    color: var(--text-active);
+    cursor: pointer;
+    font-size: 11px;
+}
+
+.notification-history-clear:hover:not([aria-disabled='true']) {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.notification-history-clear[aria-disabled='true'] {
+    color: var(--text-muted);
+    cursor: default;
+}
+
+.notification-history ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.notification-history li {
+    margin-block: 6px;
+    overflow-wrap: anywhere;
+}
+
+.notification-error {
+    color: var(--danger);
+}
+
+.corner-controls {
+    display: flex;
+    gap: 8px;
+    padding-inline-start: 14px;
+}
+
+.corner-icon-button {
+    display: grid;
+    place-items: center;
+    min-inline-size: 36px;
+    min-block-size: 36px;
+    padding: 8px;
+    border: 1px solid var(--border-line);
+    background: var(--bg-raised);
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.corner-icon-button:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.corner-icon-button svg {
+    inline-size: 18px;
+    block-size: 18px;
+}
+
+.fullscreen-error {
+    margin: 0;
+    padding: 8px var(--spacing-page);
+    color: var(--danger);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .fullscreen-bar {
+        transition: transform 120ms ease;
+    }
 }
 
 :root[data-theme='light'] .workspace-header {
@@ -340,6 +629,11 @@ input:focus-visible {
         border-block-end: 1px solid var(--border-line);
     }
 
+    .app-vnc-fullscreen .sidebar {
+        inset: auto 0 64px;
+        inline-size: auto;
+    }
+
     .brand {
         flex: 0 0 auto;
         min-block-size: 40px;
@@ -373,13 +667,6 @@ input:focus-visible {
         padding: 6px 8px;
     }
 
-    .theme-toggle {
-        flex: 0 0 auto;
-        min-block-size: 40px;
-        padding: 6px 8px;
-        font-size: 9px;
-    }
-
     .workspace-header {
         min-block-size: 68px;
         gap: 10px;
@@ -398,8 +685,12 @@ input:focus-visible {
     }
 
     .tab,
-    .theme-toggle {
+    .corner-icon-button {
         min-block-size: 44px;
+    }
+
+    .corner-icon-button {
+        min-inline-size: 44px;
     }
 }
 
